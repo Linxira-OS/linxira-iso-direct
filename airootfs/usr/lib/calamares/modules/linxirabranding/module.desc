@@ -1,0 +1,7 @@
+---
+type: job
+name: linxirabranding
+interface: python
+script: main.py
+weight: 0.1
+noconfig: true

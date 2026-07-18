@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Linxira Live Session
+Comment=Start the Linxira OS Plasma live desktop
+Exec=/usr/local/bin/linxira-live-session
+TryExec=/usr/local/bin/linxira-live-session
+DesktopNames=KDE

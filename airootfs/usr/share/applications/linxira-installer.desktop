@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Install Linxira OS
+GenericName=System Installer
+Comment=Install Linxira OS on this computer
+Exec=/usr/local/bin/linxira-installer-shell
+Icon=linxira
+Terminal=false
+Categories=System;
+StartupNotify=true
+StartupWMClass=calamares

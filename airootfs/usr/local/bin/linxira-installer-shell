@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log=/tmp/linxira-installer.log
+: >"$log"
+
+set +e
+pkexec /usr/bin/calamares >>"$log" 2>&1
+status=$?
+set -e
+
+printf '\nCalamares exited with status %d.\n' "$status" >>"$log"
+if (( status != 0 )); then
+  exec /usr/bin/konsole --fullscreen --hold -e /usr/bin/bash -c \
+    'printf "Linxira installer stopped. Diagnostic log:\n\n"; cat /tmp/linxira-installer.log'
+fi

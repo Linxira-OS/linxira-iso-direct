@@ -1,0 +1,26 @@
+---
+componentName: linxira
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+windowExpanding: fullscreen
+windowPlacement: center
+sidebar: widget
+navigation: widget
+strings:
+  productName: Linxira OS
+  shortProductName: Linxira
+  version: Direct Arch
+  shortVersion: Direct Arch
+  versionedName: Linxira OS Direct Arch
+  shortVersionedName: Linxira Direct Arch
+  bootloaderEntryName: Linxira OS
+images:
+  productLogo: linxira-logo.svg
+  productIcon: linxira-logo.svg
+style:
+  SidebarBackground: "#15232a"
+  SidebarText: "#f3f6f8"
+  SidebarTextCurrent: "#15232a"
+  SidebarBackgroundCurrent: "#63d7c6"
+slideshow: show.qml
+slideshowAPI: 2

@@ -1,0 +1,7 @@
+---
+type: job
+name: linxiravalidate
+interface: python
+script: main.py
+weight: 2
+noconfig: true

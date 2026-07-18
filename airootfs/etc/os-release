@@ -1,0 +1,10 @@
+NAME="Linxira OS"
+PRETTY_NAME="Linxira OS Direct Arch"
+ID=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;20;184;166"
+HOME_URL="https://linxira.org"
+DOCUMENTATION_URL="https://wiki.linxira.org"
+SUPPORT_URL="https://github.com/Linxira-OS"
+BUG_REPORT_URL="https://github.com/Linxira-OS/linxira-iso/issues"
+LOGO=linxira

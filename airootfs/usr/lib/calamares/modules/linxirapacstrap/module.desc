@@ -1,0 +1,6 @@
+---
+type: job
+name: linxirapacstrap
+interface: python
+script: main.py
+weight: 40
