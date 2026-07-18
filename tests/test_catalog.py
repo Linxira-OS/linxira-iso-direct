@@ -71,6 +71,12 @@ class CatalogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             linxiraoptional._selected_profiles(self.catalog, "science,--overwrite")
 
+    def test_vlc_requires_an_explicit_post_install_choice(self):
+        media = next(profile for profile in self.catalog["profiles"] if profile["id"] == "media-playback")
+        self.assertEqual(media["packages"], ["vlc"])
+        self.assertFalse(media["installer"])
+        self.assertFalse(media["presentation"]["recommended"])
+
     def test_optional_job_downloads_without_modifying_the_base(self):
         command = linxiraoptional._download_command("/target", ["jupyterlab"])
         self.assertIn("--downloadonly", command)

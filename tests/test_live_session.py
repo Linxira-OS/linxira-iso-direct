@@ -24,6 +24,8 @@ BOOT_CONFIGS = (
     PROFILE_ROOT / "grub/loopback.cfg",
     PROFILE_ROOT / "syslinux/archiso_sys-linux.cfg",
 )
+LIVE_PACKAGES = PROFILE_ROOT / "packages.x86_64"
+TARGET_PACKAGES = PROFILE_ROOT / "target-packages.x86_64"
 
 
 class LiveSessionTests(unittest.TestCase):
@@ -42,6 +44,13 @@ class LiveSessionTests(unittest.TestCase):
             self.assertIn("Start Linxira OS", config)
             self.assertNotIn("linxira.mode", config)
             self.assertNotIn("Try Linxira OS", config)
+
+    def test_media_and_vpn_apps_follow_the_preinstall_policy(self):
+        live_packages = set(LIVE_PACKAGES.read_text(encoding="utf-8").splitlines())
+        target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        self.assertTrue({"openconnect", "stoken", "haruna"}.isdisjoint(live_packages))
+        self.assertIn("gwenview", target_packages)
+        self.assertTrue({"haruna", "vlc"}.isdisjoint(target_packages))
 
     def test_grub_loads_png_support_before_the_background(self):
         config = BOOT_CONFIGS[0].read_text(encoding="utf-8")
