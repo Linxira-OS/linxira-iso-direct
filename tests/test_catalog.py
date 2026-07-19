@@ -13,6 +13,8 @@ CATALOG_PATH = CATALOG_ROOT / "catalog/catalog-v2.json"
 SCHEMA_PATH = CATALOG_ROOT / "schema/catalog-v2.schema.json"
 CHOOSER_PATH = PROFILE_ROOT / "airootfs/etc/calamares/modules/packagechooser_components.conf"
 DESKTOP_CHOOSER_PATH = PROFILE_ROOT / "airootfs/etc/calamares/modules/packagechooser_desktop.conf"
+APPLICATION_CHOOSER_PATH = PROFILE_ROOT / "airootfs/etc/calamares/modules/packagechooser_applications.conf"
+SETTINGS_PATH = PROFILE_ROOT / "airootfs/etc/calamares/settings.conf"
 OPTIONAL_MODULE_PATH = (
     PROFILE_ROOT / "airootfs/usr/lib/calamares/modules/linxiraoptional/main.py"
 )
@@ -92,6 +94,26 @@ class CatalogTests(unittest.TestCase):
             re.findall(r"^  - id: ([a-z0-9-]+)$", DESKTOP_CHOOSER_PATH.read_text(encoding="utf-8"), re.M)
         )
         self.assertEqual(chooser_ids, {desktop["id"] for desktop in self.catalog["desktopBundles"]})
+
+    def test_application_chooser_matches_catalog_applications(self):
+        chooser_ids = set(
+            re.findall(
+                r"^  - id: ([a-z0-9-]+)$",
+                APPLICATION_CHOOSER_PATH.read_text(encoding="utf-8"),
+                re.M,
+            )
+        )
+        installer_ids = {
+            application["id"]
+            for application in self.catalog["applications"]
+            if application["installer"]
+        }
+        self.assertEqual(chooser_ids, installer_ids)
+
+    def test_application_chooser_is_in_the_install_sequence(self):
+        settings = SETTINGS_PATH.read_text(encoding="utf-8")
+        self.assertIn("config: packagechooser_applications.conf", settings)
+        self.assertIn("- packagechooser@applications", settings)
 
     def test_optional_selection_is_an_allowlist(self):
         selected_ids, profiles = linxiraoptional._selected_profiles(
