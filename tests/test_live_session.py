@@ -104,6 +104,8 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("LookAndFeelPackage=org.kde.breezedark.desktop", kdeglobals)
         desktop = (PROFILE_ROOT / "airootfs/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc").read_text(encoding="utf-8")
         self.assertIn("Image=/usr/share/wallpapers/LinxiraOS/contents/images/current.svg", desktop)
+        tmpfiles = (PROFILE_ROOT / "airootfs/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf").read_text(encoding="utf-8")
+        self.assertIn("/home/installer/.config/kdeglobals", tmpfiles)
 
     def test_offline_repository_uses_a_build_scoped_cache(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
