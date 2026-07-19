@@ -99,6 +99,7 @@ def run():
             dirs_exist_ok=True,
         )
         _copy_file("/etc/skel/.bashrc", root)
+        _copy_file("/etc/skel/.config/kdeglobals", root)
         _install_target_plasma_layout(
             "/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc",
             root,

@@ -105,9 +105,10 @@ build_parent=$(dirname "$profile_dir")
 profile_copy=$(mktemp -d "${build_parent}/.linxira-archiso-profile.XXXXXX")
 work_dir=$(mktemp -d "${build_parent}/.linxira-archiso-work.XXXXXX")
 pacman_db=''
+package_cache=''
 
 cleanup() {
-  rm -rf "$profile_copy" "$work_dir" "$pacman_db" 2>/dev/null || true
+  rm -rf "$profile_copy" "$work_dir" "$pacman_db" "$package_cache" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -180,9 +181,7 @@ sed -i 's/\r$//' "$theme_target/linxira.plymouth"
 mapfile -t target_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$target_manifest")
 target_packages+=(amd-ucode intel-ucode)
 offline_repo="${profile_copy}/airootfs/opt/linxira/offline-repo/x86_64"
-package_cache="${LINXIRA_PACKAGE_CACHE:-${build_parent}/.linxira-target-package-cache}"
-mkdir -p "$package_cache"
-package_cache=$(realpath "$package_cache")
+package_cache=$(mktemp -d "${build_parent}/.linxira-target-package-cache.XXXXXX")
 pacman_db=$(mktemp -d "${build_parent}/.linxira-pacman-db.XXXXXX")
 mkdir -p "$offline_repo" "${pacman_db}/local"
 unshare --map-auto --map-root-user pacman --disable-sandbox \

@@ -23,7 +23,7 @@ Build with a verified local package artifact:
 The wrapper copies the profile to a temporary directory and creates two
 repositories. `linxira-local` is a build-only repository for Calamares, Shelly,
 and the canonical artwork package and is removed afterward. `linxira-offline`
-contains the exact target package closure and is embedded under
+contains the exact target package closure from a fresh build-scoped cache and is embedded under
 `/opt/linxira/offline-repo`; Calamares uses it without copying that repository
 configuration into the target.
 

@@ -51,6 +51,8 @@ class LiveSessionTests(unittest.TestCase):
         self.assertTrue({"openconnect", "stoken", "haruna"}.isdisjoint(live_packages))
         self.assertIn("gwenview", target_packages)
         self.assertTrue({"haruna", "vlc"}.isdisjoint(target_packages))
+        mimeapps = (PROFILE_ROOT / "airootfs/etc/xdg/mimeapps.list").read_text(encoding="utf-8")
+        self.assertNotIn("haruna", mimeapps.lower())
 
     def test_grub_loads_png_support_before_the_background(self):
         config = BOOT_CONFIGS[0].read_text(encoding="utf-8")
@@ -102,6 +104,11 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("LookAndFeelPackage=org.kde.breezedark.desktop", kdeglobals)
         desktop = (PROFILE_ROOT / "airootfs/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc").read_text(encoding="utf-8")
         self.assertIn("Image=/usr/share/wallpapers/LinxiraOS/contents/images/current.svg", desktop)
+
+    def test_offline_repository_uses_a_build_scoped_cache(self):
+        script = BUILD_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('package_cache=$(mktemp -d "${build_parent}/.linxira-target-package-cache.XXXXXX")', script)
+        self.assertNotIn("LINXIRA_PACKAGE_CACHE", script)
 
     def test_failed_session_does_not_autologin_forever(self):
         config = SDDM_CONFIG.read_text(encoding="utf-8")

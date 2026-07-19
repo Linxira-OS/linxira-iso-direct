@@ -91,6 +91,10 @@ class BrandingConfigurationTests(unittest.TestCase):
             self.assertIn("org.linxira.Welcome.desktop", contents)
             self.assertIn("com.shellyorg.shelly.desktop", contents)
 
+    def test_run_copies_dark_kde_defaults_to_target(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn('_copy_file("/etc/skel/.config/kdeglobals", root)', source)
+
 
 if __name__ == "__main__":
     unittest.main()
