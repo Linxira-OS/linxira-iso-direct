@@ -2,9 +2,11 @@
 
 This profile builds a development installer ISO from Arch packages plus locally
 built Calamares, Shelly, and Linxira artwork packages. Discover is deliberately
-excluded; Shelly is the default graphical package manager in both the live
-environment and the fixed Standard target package set. KDE Plasma is the
-default desktop in both environments.
+excluded. Linxira Package Center is the catalog application installer; Shelly
+remains available for reviewed recommendations and package browsing. Package
+Center creates application plans and confirmations, then authorizes the
+root-only `linxira-components` backend to execute one pacman transaction and
+persist its receipt. KDE Plasma is the default desktop in both environments.
 
 Fresh Shelly profiles leave AUR, Flatpak, AppImage, and background tray checks
 disabled. Enabling background checks does not enable or query another source.
@@ -20,7 +22,9 @@ Build with a verified local package artifact:
   --output ./out
 ```
 
-The wrapper copies the profile to a temporary directory and creates two
+The wrapper injects the reviewed catalog, Config Hub, Package Center and the
+`linxira-components` Python backend into both Live and installed targets. It
+then copies the profile to a temporary directory and creates two
 repositories. `linxira-local` is a build-only repository for Calamares, Shelly,
 and the canonical artwork package and is removed afterward. `linxira-offline`
 contains the exact target package closure from a fresh build-scoped cache and is embedded under

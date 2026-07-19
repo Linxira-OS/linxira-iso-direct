@@ -62,7 +62,9 @@ def _selected_applications(catalog, selection):
     applications = {
         application["id"]: application
         for application in catalog.get("applications", [])
-        if application.get("installer") and application.get("source") == "arch"
+        if application.get("installer")
+        and application.get("source") == "arch"
+        and application.get("review", {}).get("status") == "reviewed"
     }
     selected_ids = [item for item in selection.split(",") if item]
     unknown = sorted(set(selected_ids) - applications.keys())

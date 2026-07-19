@@ -44,7 +44,8 @@ class ConfigCliTests(unittest.TestCase):
         packages = (PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8")
         self.assertIn("kdialog\n", packages)
         self.assertIn("pkexec", script)
-        self.assertIn("pkexec pacman", script)
+        self.assertIn("pkexec \"$COMPONENTS_CLI\" apply", script)
+        self.assertIn("--application", script)
         self.assertNotIn("CONFIG_CLI", script)
 
     def test_software_center_selects_individual_applications_by_category(self):
@@ -52,13 +53,12 @@ class ConfigCliTests(unittest.TestCase):
         self.assertIn(".applications[]", script)
         self.assertIn(".categories", script)
         self.assertIn(".installer == true", script)
-        self.assertIn(".source == \"arch\"", script)
+        self.assertIn(".review.status == \"reviewed\"", script)
 
-    def test_config_cli_application_install_is_catalog_allowlisted(self):
+    def test_config_cli_defers_software_installation_to_package_center(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
-        self.assertIn("catalog_application_packages", script)
-        self.assertIn(".applications[] | select(.id == $application", script)
-        self.assertIn("install_catalog_applications", script)
+        self.assertIn("Software installation is owned by Linxira Package Center", script)
+        self.assertNotIn("Install (post-install packages)", script)
 
     def test_runtime_status_reports_nix_and_unresolved_wise(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")

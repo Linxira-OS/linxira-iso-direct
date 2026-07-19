@@ -10,6 +10,7 @@ config_cli="${profile_dir}/../linxira-config-hub/cli/linxira-config"
 software_center="${profile_dir}/../linxira-config-hub/cli/linxira-software-center"
 welcome_source="${profile_dir}/../linxira-welcome"
 catalog_source="${profile_dir}/../linxira-catalog"
+components_source="${profile_dir}/../linxira-components"
 shelly_package=''
 calamares_package=''
 artwork_package=''
@@ -62,6 +63,8 @@ if [[ ! -f "$config_cli" ||
       ! -f "$welcome_source/data/i18n/zh_CN.json" ||
       ! -f "$catalog_source/catalog/catalog-v2.json" ||
       ! -f "$catalog_source/schema/catalog-v2.schema.json" ||
+      ! -f "$components_source/scripts/linxira-components" ||
+      ! -f "$components_source/src/linxira_components/__main__.py" ||
       -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$calamares_package" || ! -f "$calamares_package" ||
       -z "$artwork_package" || ! -f "$artwork_package" ||
@@ -129,6 +132,13 @@ install -Dm755 "$config_cli" \
   "${profile_copy}/airootfs/usr/local/bin/linxira-config"
 install -Dm755 "$software_center" \
   "${profile_copy}/airootfs/usr/bin/linxira-software-center"
+install -Dm755 "$components_source/scripts/linxira-components" \
+  "${profile_copy}/airootfs/usr/bin/linxira-components"
+mkdir -p "${profile_copy}/airootfs/usr/lib/linxira-components"
+cp -a "$components_source/src/linxira_components" \
+  "${profile_copy}/airootfs/usr/lib/linxira-components/"
+find "${profile_copy}/airootfs/usr/lib/linxira-components" \
+  -type d -name __pycache__ -prune -exec rm -rf {} +
 install -Dm755 "$welcome_source/src/linxira-welcome" \
   "${profile_copy}/airootfs/usr/bin/linxira-welcome"
 install -Dm644 "$welcome_source/data/org.linxira.Welcome.desktop" \

@@ -41,6 +41,7 @@ plasma-systemmonitor
 plymouth
 polkit-kde-agent
 power-profiles-daemon
+python
 pyside6
 sddm
 shelly
