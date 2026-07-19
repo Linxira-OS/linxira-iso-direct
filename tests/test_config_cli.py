@@ -4,6 +4,7 @@ import unittest
 
 PROFILE_ROOT = Path(__file__).parents[1]
 CONFIG_CLI = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-config"
+SOFTWARE_CENTER = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-software-center"
 
 
 class ConfigCliTests(unittest.TestCase):
@@ -21,6 +22,54 @@ class ConfigCliTests(unittest.TestCase):
         script = CONFIG_CLI.read_text(encoding="utf-8")
         self.assertIn("/^linux(-lts|-zen|-hardened)?$/", script)
         self.assertNotIn("linux-cachyos|linux-linxira", script)
+
+    def test_privileged_network_and_service_inputs_are_validated(self):
+        script = CONFIG_CLI.read_text(encoding="utf-8")
+        self.assertIn("validate_port", script)
+        self.assertIn("validate_dns_server", script)
+        self.assertIn("target_user", script)
+        self.assertIn("PKEXEC_UID", script)
+        self.assertIn('sudo -u "$user" env HOME="$home"', script)
+
+    def test_unverified_remote_desktop_actions_fail_closed(self):
+        script = CONFIG_CLI.read_text(encoding="utf-8")
+        self.assertIn("xrdp is not present in Linxira's signed repositories", script)
+        self.assertIn("a per-user TigerVNC session and firewall policy must be implemented first", script)
+        self.assertNotIn("pacman -S --noconfirm xrdp", script)
+
+    def test_software_center_uses_catalog_and_shared_cli_transaction(self):
+        script = SOFTWARE_CENTER.read_text(encoding="utf-8")
+        self.assertIn("catalog-v2.json", script)
+        self.assertIn(".applications[]", script)
+        packages = (PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8")
+        self.assertIn("kdialog\n", packages)
+        self.assertIn("pkexec", script)
+        self.assertIn('"$CONFIG_CLI" install', script)
+
+    def test_software_center_selects_individual_applications_by_category(self):
+        script = SOFTWARE_CENTER.read_text(encoding="utf-8")
+        self.assertIn(".applications[]", script)
+        self.assertIn(".categories", script)
+        self.assertIn('install applications', script)
+
+    def test_config_cli_application_install_is_catalog_allowlisted(self):
+        script = CONFIG_CLI.read_text(encoding="utf-8")
+        self.assertIn("catalog_application_packages", script)
+        self.assertIn(".applications[] | select(.id == $application", script)
+        self.assertIn("install_catalog_applications", script)
+
+    def test_runtime_status_reports_nix_and_unresolved_wise(self):
+        script = CONFIG_CLI.read_text(encoding="utf-8")
+        self.assertIn("runtime_status", script)
+        self.assertIn("nix", script)
+        self.assertIn("unresolved", script)
+        self.assertIn("wise", script)
+
+    def test_build_injects_brand_policy_into_live_and_target(self):
+        build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
+        branding = (PROFILE_ROOT / "airootfs/usr/lib/calamares/modules/linxirabranding/main.py").read_text(encoding="utf-8")
+        self.assertIn("usr/share/doc/linxira-artwork/TRADEMARKS.md", build)
+        self.assertIn('"/usr/share/doc/linxira-artwork/TRADEMARKS.md"', branding)
 
 
 if __name__ == "__main__":

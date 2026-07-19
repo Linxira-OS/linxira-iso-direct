@@ -73,7 +73,17 @@ def run():
             if "linxira-offline" in pacman_conf.read():
                 failures.append("offline repository retained")
 
-    for path in ("/etc/calamares", "/etc/xdg/autostart/linxira-installer.desktop"):
+    live_only_paths = (
+        "/etc/calamares",
+        "/etc/xdg/autostart/linxira-installer.desktop",
+        "/etc/sddm.conf.d/10-linxira-live.conf",
+        "/etc/polkit-1/rules.d/49-linxira-installer.rules",
+        "/usr/local/bin/linxira-installer-shell",
+        "/usr/local/bin/linxira-live-session",
+        "/usr/share/wayland-sessions/linxira-live.desktop",
+        "/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf",
+    )
+    for path in live_only_paths:
         if os.path.exists(_target_path(root, path)):
             failures.append("live installer content retained: " + path)
 

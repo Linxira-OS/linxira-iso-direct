@@ -7,6 +7,7 @@ usage() {
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 config_cli="${profile_dir}/../linxira-config-hub/cli/linxira-config"
+software_center="${profile_dir}/../linxira-config-hub/cli/linxira-software-center"
 welcome_source="${profile_dir}/../linxira-welcome"
 catalog_source="${profile_dir}/../linxira-catalog"
 shelly_package=''
@@ -54,6 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ! -f "$config_cli" ||
+      ! -f "$software_center" ||
       ! -f "$welcome_source/src/linxira-welcome" ||
       ! -f "$welcome_source/data/org.linxira.Welcome.desktop" ||
       ! -f "$welcome_source/data/autostart/org.linxira.Welcome.desktop" ||
@@ -101,6 +103,10 @@ if [[ $artwork_name != linxira-artwork ]]; then
   printf 'The artwork artifact does not contain the linxira-artwork package.\n' >&2
   exit 1
 fi
+if ! bsdtar -tf "$artwork_package" | grep -qx 'usr/share/doc/linxira-artwork/TRADEMARKS.md'; then
+  printf 'The artwork artifact does not contain the Linxira brand policy.\n' >&2
+  exit 1
+fi
 build_parent=$(dirname "$profile_dir")
 profile_copy=$(mktemp -d "${build_parent}/.linxira-archiso-profile.XXXXXX")
 work_dir=$(mktemp -d "${build_parent}/.linxira-archiso-work.XXXXXX")
@@ -121,6 +127,8 @@ if [[ -e "${profile_copy}/airootfs/etc/systemd/system/multi-user.target.wants/ss
 fi
 install -Dm755 "$config_cli" \
   "${profile_copy}/airootfs/usr/local/bin/linxira-config"
+install -Dm755 "$software_center" \
+  "${profile_copy}/airootfs/usr/bin/linxira-software-center"
 install -Dm755 "$welcome_source/src/linxira-welcome" \
   "${profile_copy}/airootfs/usr/bin/linxira-welcome"
 install -Dm644 "$welcome_source/data/org.linxira.Welcome.desktop" \

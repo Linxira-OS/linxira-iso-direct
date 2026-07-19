@@ -107,6 +107,18 @@ class LiveSessionTests(unittest.TestCase):
         tmpfiles = (PROFILE_ROOT / "airootfs/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf").read_text(encoding="utf-8")
         self.assertIn("/home/installer/.config/kdeglobals", tmpfiles)
 
+    def test_live_session_does_not_lock_or_suspend_on_idle(self):
+        tmpfiles = (PROFILE_ROOT / "airootfs/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf").read_text(encoding="utf-8")
+        lock_config = (PROFILE_ROOT / "airootfs/usr/share/linxira/live/kscreenlockerrc").read_text(encoding="utf-8")
+        power_config = (PROFILE_ROOT / "airootfs/usr/share/linxira/live/powermanagementprofilesrc").read_text(encoding="utf-8")
+        self.assertIn("/home/installer/.config/kscreenlockerrc", tmpfiles)
+        self.assertIn("/home/installer/.config/powermanagementprofilesrc", tmpfiles)
+        self.assertIn("Autolock=false", lock_config)
+        self.assertIn("LockOnResume=false", lock_config)
+        self.assertIn("noScreenManagement=true", power_config)
+        self.assertIn("noSuspend=true", power_config)
+        self.assertIn("lockBeforeTurnOff=0", power_config)
+
     def test_offline_repository_uses_a_build_scoped_cache(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
         self.assertIn('package_cache=$(mktemp -d "${build_parent}/.linxira-target-package-cache.XXXXXX")', script)
@@ -124,6 +136,31 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("pkexec /usr/bin/calamares", script)
         self.assertNotIn("is-active polkit.service", script)
         self.assertIn("if (( status != 0 ))", script)
+
+    def test_calamares_sequence_has_valid_indentation(self):
+        settings = (PROFILE_ROOT / "airootfs/etc/calamares/settings.conf").read_text(encoding="utf-8")
+        self.assertIn("      - partition\n      - packagechooser@desktop\n      - packagechooser@components", settings)
+        self.assertNotIn("       - partition", settings)
+        self.assertNotIn("       - packagechooser@desktop", settings)
+
+    def test_target_manifest_excludes_live_installer_packages(self):
+        target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        self.assertNotIn("calamares", target_packages)
+        self.assertNotIn("archiso", target_packages)
+
+    def test_target_validator_rejects_live_only_paths(self):
+        validator = (
+            PROFILE_ROOT
+            / "airootfs/usr/lib/calamares/modules/linxiravalidate/main.py"
+        ).read_text(encoding="utf-8")
+        for path in (
+            "/etc/calamares",
+            "/etc/sddm.conf.d/10-linxira-live.conf",
+            "/etc/polkit-1/rules.d/49-linxira-installer.rules",
+            "/usr/local/bin/linxira-installer-shell",
+            "/usr/local/bin/linxira-live-session",
+        ):
+            self.assertIn(path, validator)
 
 
 if __name__ == "__main__":
