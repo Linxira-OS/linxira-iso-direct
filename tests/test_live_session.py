@@ -77,16 +77,31 @@ class LiveSessionTests(unittest.TestCase):
         for forbidden in ("shell=True", "bash -c", "sudo", "pkexec"):
             self.assertNotIn(forbidden, script)
 
-    def test_welcome_translations_share_one_complete_key_set(self):
+    def test_welcome_translations_have_a_complete_base_and_allow_fallback(self):
         translations = [
             json.loads(path.read_text(encoding="utf-8"))
             for path in sorted(WELCOME_I18N.glob("*.json"))
         ]
         self.assertEqual(len(translations), 9)
-        expected_keys = set(translations[0])
-        self.assertGreaterEqual(len(expected_keys), 40)
-        for translation in translations[1:]:
-            self.assertEqual(set(translation), expected_keys)
+        base_keys = {
+            "overview", "software", "system", "resources", "install",
+            "open_software", "open_settings", "open_terminal", "catalog",
+            "system_tools", "updates", "docs", "website", "wiki", "github",
+        }
+        for translation in translations:
+            self.assertTrue(base_keys.issubset(translation))
+        simplified_chinese = json.loads((WELCOME_I18N / "zh_CN.json").read_text(encoding="utf-8"))
+        for key in ("setup", "sources", "open_config", "open_mirrors", "open_runtime", "open_miniforge"):
+            self.assertIn(key, simplified_chinese)
+
+    def test_welcome_exposes_package_center_config_and_source_categories(self):
+        script = WELCOME.read_text(encoding="utf-8")
+        self.assertIn('"package_center": ("/usr/bin/linxira-software-center", [])', script)
+        self.assertIn('"mirrors": ("/usr/bin/konsole"', script)
+        self.assertIn('"miniforge": ("/usr/bin/konsole"', script)
+        self.assertIn('self._setup_page()', script)
+        self.assertIn('self._sources_page()', script)
+        self.assertIn('self.catalog.get("applications", [])', script)
 
     def test_scale_l_is_the_canonical_logo(self):
         canonical = CANONICAL_LOGO.read_text(encoding="utf-8")
