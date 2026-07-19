@@ -96,6 +96,13 @@ class LiveSessionTests(unittest.TestCase):
             self.assertIn(geometry, canonical)
             self.assertIn(geometry, scale)
 
+    def test_default_desktop_uses_dark_kde_settings(self):
+        kdeglobals = (PROFILE_ROOT / "airootfs/etc/skel/.config/kdeglobals").read_text(encoding="utf-8")
+        self.assertIn("ColorScheme=BreezeDark", kdeglobals)
+        self.assertIn("LookAndFeelPackage=org.kde.breezedark.desktop", kdeglobals)
+        desktop = (PROFILE_ROOT / "airootfs/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc").read_text(encoding="utf-8")
+        self.assertIn("Image=/usr/share/wallpapers/LinxiraOS/contents/images/current.svg", desktop)
+
     def test_failed_session_does_not_autologin_forever(self):
         config = SDDM_CONFIG.read_text(encoding="utf-8")
         self.assertIn("Relogin=false", config)
