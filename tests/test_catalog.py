@@ -43,6 +43,9 @@ class CatalogTests(unittest.TestCase):
 
         source_ids = [source["id"] for source in self.catalog["sources"]]
         self.assertEqual(len(source_ids), len(set(source_ids)))
+        sources = {source["id"]: source for source in self.catalog["sources"]}
+        self.assertEqual(sources["conda-forge"]["kind"], "conda")
+        self.assertEqual(sources["bioconda"]["trust"], "verified-third-party")
 
         for application in self.catalog["applications"]:
             self.assertIn(application["source"], source_ids)
