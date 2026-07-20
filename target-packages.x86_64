@@ -29,6 +29,7 @@ linux-lts
 linux-lts-headers
 linxira-artwork
 linxira-catalog
+linxira-component-manager
 linxira-components
 linxira-config-hub
 linxira-package-center

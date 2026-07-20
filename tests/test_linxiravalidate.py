@@ -17,6 +17,17 @@ spec.loader.exec_module(linxiravalidate)
 
 
 class InstalledSystemValidationTests(unittest.TestCase):
+    def test_validator_requires_component_manager_and_catalog_v3(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        for value in (
+            '"linxira-component-manager"',
+            '"/usr/bin/linxira-component-manager"',
+            '"/usr/share/applications/org.linxira.ComponentManager.desktop"',
+            '"/usr/share/linxira/catalog/catalog-v3.json"',
+            '"/usr/share/linxira/catalog/catalog-v3.schema.json"',
+        ):
+            self.assertIn(value, source)
+
     def test_obsolete_initcpio_module_spellings_are_found_in_all_config_locations(self):
         with tempfile.TemporaryDirectory() as temporary_root:
             root = Path(temporary_root)

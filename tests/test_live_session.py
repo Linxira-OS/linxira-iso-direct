@@ -84,24 +84,24 @@ class LiveSessionTests(unittest.TestCase):
         ]
         self.assertEqual(len(translations), 9)
         base_keys = {
-            "overview", "software", "system", "resources", "install",
-            "open_software", "open_settings", "open_terminal", "catalog",
-            "system_tools", "updates", "docs", "website", "wiki", "github",
+            "home", "status", "help", "install", "open_software",
+            "open_components", "open_config", "open_settings", "health",
+            "first_completion", "docs", "website", "wiki", "github",
         }
         for translation in translations:
             self.assertTrue(base_keys.issubset(translation))
         simplified_chinese = json.loads((WELCOME_I18N / "zh_CN.json").read_text(encoding="utf-8"))
-        for key in ("setup", "sources", "open_config", "open_mirrors", "open_runtime", "open_miniforge"):
+        for key in ("home", "status", "help", "open_config", "open_components"):
             self.assertIn(key, simplified_chinese)
 
-    def test_welcome_exposes_package_center_config_and_source_categories(self):
+    def test_welcome_only_routes_to_fixed_product_surfaces(self):
         script = WELCOME.read_text(encoding="utf-8")
         self.assertIn('"package_center": ("/usr/bin/linxira-package-center", [])', script)
-        self.assertIn('"mirrors": ("/usr/bin/konsole"', script)
-        self.assertIn('"miniforge": ("/usr/bin/konsole"', script)
-        self.assertIn('self._setup_page()', script)
-        self.assertIn('self._sources_page()', script)
-        self.assertIn('self.catalog.get("applications", [])', script)
+        self.assertIn('"component_manager": ("/usr/bin/linxira-component-manager", [])', script)
+        self.assertIn('"config": ("/usr/bin/konsole"', script)
+        self.assertNotIn('"mirrors":', script)
+        self.assertNotIn('"miniforge":', script)
+        self.assertNotIn('self.catalog.get("applications", [])', script)
 
     def test_scale_l_is_the_canonical_logo(self):
         canonical = CANONICAL_LOGO.read_text(encoding="utf-8")
@@ -179,6 +179,7 @@ class LiveSessionTests(unittest.TestCase):
         target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
         artifact_contracts = {
             "catalog_package": "linxira-catalog",
+            "component_manager_package": "linxira-component-manager",
             "components_package": "linxira-components",
             "config_hub_package": "linxira-config-hub",
             "package_center_package": "linxira-package-center",

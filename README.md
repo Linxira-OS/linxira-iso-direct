@@ -4,9 +4,10 @@ This profile builds a development installer ISO from Arch packages plus pinned
 local artifacts for Calamares, Shelly, artwork, and Linxira system software. Discover is deliberately
 excluded. Linxira Package Center is the catalog application installer; Shelly
 remains available for reviewed recommendations and package browsing. Package
-Center creates application plans and confirmations, then authorizes the
-root-only `linxira-components` backend to execute one pacman transaction and
-persist its receipt. KDE Plasma is the default desktop in both environments.
+Center creates application plans and confirmations. Component Manager provides
+the nested capability tree. Both authorize the root-only `linxira-components`
+backend to execute one pacman transaction and persist its receipt. KDE Plasma is
+the default desktop in both environments.
 
 Fresh Shelly profiles leave AUR, Flatpak, AppImage, and background tray checks
 disabled. Enabling background checks does not enable or query another source.
@@ -18,10 +19,11 @@ Build with a verified local package artifact:
   --shelly-package /path/to/shelly-2.4.1.4-1-x86_64.pkg.tar.zst \
   --calamares-package /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
   --artwork-package /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
-  --catalog-package /path/to/linxira-catalog-2.0.0-3-any.pkg.tar.zst \
+  --catalog-package /path/to/linxira-catalog-3.0.0-1-any.pkg.tar.zst \
   --components-package /path/to/linxira-components-0.2.0-1-any.pkg.tar.zst \
-  --config-hub-package /path/to/linxira-config-hub-2.1.0-1-any.pkg.tar.zst \
-  --package-center-package /path/to/linxira-package-center-0.1.0-1-any.pkg.tar.zst \
+  --component-manager-package /path/to/linxira-component-manager-0.1.0-1-any.pkg.tar.zst \
+  --config-hub-package /path/to/linxira-config-hub-2.2.0-1-any.pkg.tar.zst \
+  --package-center-package /path/to/linxira-package-center-0.2.0-1-any.pkg.tar.zst \
   --welcome-package /path/to/linxira-welcome-1.0.0-2-any.pkg.tar.zst \
   --plymouth-theme-directory /path/to/linxira-plymouth-theme \
   --output ./out

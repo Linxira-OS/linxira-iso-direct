@@ -5,18 +5,20 @@ import unittest
 PROFILE_ROOT = Path(__file__).parents[1]
 CONFIG_CLI = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-config"
 PACKAGE_CENTER = PROFILE_ROOT.parent / "linxira-package-center/src/linxira-package-center"
+COMPONENT_MANAGER = PROFILE_ROOT.parent / "linxira-component-manager/src/linxira_component_manager/backend.py"
 
 
 class ConfigCliTests(unittest.TestCase):
-    def test_cli_consumes_catalog_v2(self):
+    def test_cli_consumes_catalog_v3(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
-        self.assertIn("catalog-v2.json", script)
-        self.assertIn(".catalogVersion == 2", script)
+        self.assertIn("catalog-v3.json", script)
+        self.assertIn("catalog <kind>", script)
         self.assertNotIn("catalog-v1.json", script)
 
-    def test_bio_alias_maps_to_the_reviewed_profile(self):
+    def test_cli_does_not_install_catalog_profiles(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
-        self.assertIn("bio) install_catalog_profile bioinformatics", script)
+        self.assertNotIn("install_catalog_profile", script)
+        self.assertNotIn("install_catalog_applications", script)
 
     def test_system_info_reports_only_official_kernel_names(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
@@ -39,23 +41,26 @@ class ConfigCliTests(unittest.TestCase):
 
     def test_package_center_owns_the_catalog_install_transaction(self):
         script = PACKAGE_CENTER.read_text(encoding="utf-8")
-        self.assertIn("catalog-v2.json", script)
-        self.assertIn(".applications[]", script)
-        live_packages = (PROFILE_ROOT / "packages.x86_64").read_text(encoding="utf-8")
-        target_packages = (PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8")
-        self.assertIn("kdialog\n", live_packages)
-        self.assertIn("kdialog\n", target_packages)
+        self.assertIn("catalog-v3.json", script)
+        self.assertIn("QTreeWidget", script)
         self.assertIn("pkexec", script)
-        self.assertIn("pkexec \"$COMPONENTS_CLI\" apply", script)
-        self.assertIn("--application", script)
+        self.assertIn('self.pkexec, self.components_cli, "apply"', script)
+        self.assertIn('command.extend(("--selection", str(selection_path)))', script)
+        self.assertIn("PartiallyChecked", script)
         self.assertNotIn("CONFIG_CLI", script)
 
     def test_package_center_selects_individual_applications_by_category(self):
         script = PACKAGE_CENTER.read_text(encoding="utf-8")
-        self.assertIn(".applications[]", script)
-        self.assertIn(".categories", script)
-        self.assertIn(".installer == true", script)
-        self.assertIn(".review.status == \"reviewed\"", script)
+        self.assertIn('category.get("surface") != "applications"', script)
+        self.assertIn('review_status != "reviewed"', script)
+        self.assertIn('channel == "optional-review"', script)
+        self.assertIn("maxSelected", script)
+
+    def test_both_v3_uis_bind_apply_to_the_same_catalog(self):
+        package_center = PACKAGE_CENTER.read_text(encoding="utf-8")
+        component_manager = COMPONENT_MANAGER.read_text(encoding="utf-8")
+        self.assertIn('"--catalog", str(self.catalog_path)', package_center)
+        self.assertIn('"--catalog",\n            str(transaction.catalog_path)', component_manager)
 
     def test_config_cli_defers_software_installation_to_package_center(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
