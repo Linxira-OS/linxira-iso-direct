@@ -28,6 +28,11 @@ linux-headers
 linux-lts
 linux-lts-headers
 linxira-artwork
+linxira-catalog
+linxira-components
+linxira-config-hub
+linxira-package-center
+linxira-welcome
 networkmanager
 noto-fonts
 noto-fonts-cjk

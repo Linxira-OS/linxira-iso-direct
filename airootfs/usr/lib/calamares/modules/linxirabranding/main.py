@@ -88,26 +88,6 @@ def run():
     try:
         _copy_file("/etc/os-release", root)
         _copy_file("/etc/fastfetch/config.d/linxira.jsonc", root)
-        _copy_file("/usr/share/linxira/catalog/catalog-v2.json", root)
-        _copy_file("/usr/share/linxira/catalog/catalog-v2.schema.json", root)
-        _copy_file("/usr/share/doc/linxira-artwork/TRADEMARKS.md", root)
-        _copy_file("/usr/local/bin/linxira-config", root)
-        _copy_file("/usr/bin/linxira-package-center", root)
-        _copy_file("/usr/bin/linxira-components", root)
-        _copy_file("/usr/bin/linxira-welcome", root)
-        _copy_file("/usr/share/applications/org.linxira.Welcome.desktop", root)
-        _copy_file("/usr/share/applications/org.linxira.PackageCenter.desktop", root)
-        _copy_file("/etc/xdg/autostart/org.linxira.Welcome.desktop", root)
-        shutil.copytree(
-            "/usr/lib/linxira-components",
-            Path(root) / "usr/lib/linxira-components",
-            dirs_exist_ok=True,
-        )
-        shutil.copytree(
-            "/usr/share/linxira/welcome",
-            Path(root) / "usr/share/linxira/welcome",
-            dirs_exist_ok=True,
-        )
         _copy_file("/etc/skel/.bashrc", root)
         _copy_file("/etc/skel/.config/kdeglobals", root)
         _install_target_plasma_layout(

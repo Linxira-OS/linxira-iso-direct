@@ -69,11 +69,11 @@ class ConfigCliTests(unittest.TestCase):
         self.assertIn("unresolved", script)
         self.assertIn("wise", script)
 
-    def test_build_injects_brand_policy_into_live_and_target(self):
+    def test_build_validates_packaged_brand_policy(self):
         build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
         branding = (PROFILE_ROOT / "airootfs/usr/lib/calamares/modules/linxirabranding/main.py").read_text(encoding="utf-8")
         self.assertIn("usr/share/doc/linxira-artwork/TRADEMARKS.md", build)
-        self.assertIn('"/usr/share/doc/linxira-artwork/TRADEMARKS.md"', branding)
+        self.assertNotIn('"/usr/share/doc/linxira-artwork/TRADEMARKS.md"', branding)
 
 
 if __name__ == "__main__":

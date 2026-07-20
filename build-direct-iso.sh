@@ -2,18 +2,18 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --config-hub-package PATH --package-center-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-config_cli="${profile_dir}/../linxira-config-hub/cli/linxira-config"
-package_center_source="${profile_dir}/../linxira-package-center"
-welcome_source="${profile_dir}/../linxira-welcome"
-catalog_source="${profile_dir}/../linxira-catalog"
-components_source="${profile_dir}/../linxira-components"
 shelly_package=''
 calamares_package=''
 artwork_package=''
+catalog_package=''
+components_package=''
+config_hub_package=''
+package_center_package=''
+welcome_package=''
 plymouth_theme_directory=''
 output_dir="${profile_dir}/out"
 
@@ -32,6 +32,31 @@ while [[ $# -gt 0 ]]; do
     --artwork-package)
       [[ $# -ge 2 ]] || usage
       artwork_package=$2
+      shift 2
+      ;;
+    --catalog-package)
+      [[ $# -ge 2 ]] || usage
+      catalog_package=$2
+      shift 2
+      ;;
+    --components-package)
+      [[ $# -ge 2 ]] || usage
+      components_package=$2
+      shift 2
+      ;;
+    --config-hub-package)
+      [[ $# -ge 2 ]] || usage
+      config_hub_package=$2
+      shift 2
+      ;;
+    --package-center-package)
+      [[ $# -ge 2 ]] || usage
+      package_center_package=$2
+      shift 2
+      ;;
+    --welcome-package)
+      [[ $# -ge 2 ]] || usage
+      welcome_package=$2
       shift 2
       ;;
     --plymouth-theme-directory)
@@ -55,20 +80,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! -f "$config_cli" ||
-      ! -f "$package_center_source/src/linxira-package-center" ||
-      ! -f "$package_center_source/data/org.linxira.PackageCenter.desktop" ||
-      ! -f "$welcome_source/src/linxira-welcome" ||
-      ! -f "$welcome_source/data/org.linxira.Welcome.desktop" ||
-      ! -f "$welcome_source/data/autostart/org.linxira.Welcome.desktop" ||
-      ! -f "$welcome_source/data/i18n/zh_CN.json" ||
-      ! -f "$catalog_source/catalog/catalog-v2.json" ||
-      ! -f "$catalog_source/schema/catalog-v2.schema.json" ||
-      ! -f "$components_source/scripts/linxira-components" ||
-      ! -f "$components_source/src/linxira_components/__main__.py" ||
-      -z "$shelly_package" || ! -f "$shelly_package" ||
+if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$calamares_package" || ! -f "$calamares_package" ||
       -z "$artwork_package" || ! -f "$artwork_package" ||
+      -z "$catalog_package" || ! -f "$catalog_package" ||
+      -z "$components_package" || ! -f "$components_package" ||
+      -z "$config_hub_package" || ! -f "$config_hub_package" ||
+      -z "$package_center_package" || ! -f "$package_center_package" ||
+      -z "$welcome_package" || ! -f "$welcome_package" ||
       -z "$plymouth_theme_directory" ||
       ! -f "$plymouth_theme_directory/linxira.plymouth" ||
       ! -f "$plymouth_theme_directory/watermark.png" ||
@@ -77,6 +96,26 @@ if [[ ! -f "$config_cli" ||
   usage
   exit 2
 fi
+
+validate_package_artifact() {
+  local artifact=$1
+  local expected_name=$2
+  shift 2
+  local actual_name entry
+
+  read -r actual_name _ < <(pacman -Qp "$artifact")
+  if [[ $actual_name != "$expected_name" ]]; then
+    printf 'Package artifact contains %s instead of %s: %s\n' \
+      "$actual_name" "$expected_name" "$artifact" >&2
+    exit 1
+  fi
+  for entry in "$@"; do
+    if ! bsdtar -tf "$artifact" | grep -Fqx "$entry"; then
+      printf '%s artifact is missing %s\n' "$expected_name" "$entry" >&2
+      exit 1
+    fi
+  done
+}
 command -v mkarchiso >/dev/null
 command -v pacman >/dev/null
 command -v repo-add >/dev/null
@@ -91,24 +130,45 @@ fi
 shelly_package=$(realpath "$shelly_package")
 calamares_package=$(realpath "$calamares_package")
 artwork_package=$(realpath "$artwork_package")
+catalog_package=$(realpath "$catalog_package")
+components_package=$(realpath "$components_package")
+config_hub_package=$(realpath "$config_hub_package")
+package_center_package=$(realpath "$package_center_package")
+welcome_package=$(realpath "$welcome_package")
 plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
-read -r shelly_name _ < <(pacman -Qp "$shelly_package")
-read -r calamares_name _ < <(pacman -Qp "$calamares_package")
-read -r artwork_name _ < <(pacman -Qp "$artwork_package")
-if [[ $shelly_name != shelly ]]; then
-  printf 'The Shelly artifact does not contain the shelly package.\n' >&2
-  exit 1
-fi
-if [[ $calamares_name != calamares ]]; then
-  printf 'The Calamares artifact does not contain the calamares package.\n' >&2
-  exit 1
-fi
-if [[ $artwork_name != linxira-artwork ]]; then
-  printf 'The artwork artifact does not contain the linxira-artwork package.\n' >&2
-  exit 1
-fi
+validate_package_artifact "$shelly_package" shelly
+validate_package_artifact "$calamares_package" calamares
+validate_package_artifact "$artwork_package" linxira-artwork \
+  usr/share/doc/linxira-artwork/TRADEMARKS.md
+validate_package_artifact "$catalog_package" linxira-catalog \
+  usr/share/linxira/catalog/catalog-v2.json \
+  usr/share/linxira/catalog/catalog-v2.schema.json \
+  usr/share/licenses/linxira-catalog/LICENSE
+validate_package_artifact "$components_package" linxira-components \
+  usr/bin/linxira-components \
+  usr/lib/linxira-components/linxira_components/__main__.py \
+  usr/lib/linxira-components/linxira_components/schemas/receipt-v1.schema.json \
+  usr/share/licenses/linxira-components/LICENSE
+validate_package_artifact "$config_hub_package" linxira-config-hub \
+  usr/bin/linxira-config \
+  usr/share/licenses/linxira-config-hub/LICENSE
+validate_package_artifact "$package_center_package" linxira-package-center \
+  usr/bin/linxira-package-center \
+  usr/share/applications/org.linxira.PackageCenter.desktop \
+  usr/share/linxira/package-center/VERSION \
+  usr/share/licenses/linxira-package-center/LICENSE
+validate_package_artifact "$welcome_package" linxira-welcome \
+  usr/bin/linxira-welcome \
+  usr/share/applications/org.linxira.Welcome.desktop \
+  etc/xdg/autostart/org.linxira.Welcome.desktop \
+  usr/share/linxira/welcome/i18n/zh_CN.json \
+  usr/share/licenses/linxira-welcome/LICENSE
 if ! bsdtar -tf "$artwork_package" | grep -qx 'usr/share/doc/linxira-artwork/TRADEMARKS.md'; then
   printf 'The artwork artifact does not contain the Linxira brand policy.\n' >&2
+  exit 1
+fi
+if bsdtar -tf "$components_package" | grep -Eq '(__pycache__|\.pyc$|^usr/share/(dbus-1|polkit-1)/)'; then
+  printf 'The components artifact contains generated bytecode or draft privileged integration.\n' >&2
   exit 1
 fi
 build_parent=$(dirname "$profile_dir")
@@ -129,33 +189,6 @@ if [[ -e "${profile_copy}/airootfs/etc/systemd/system/multi-user.target.wants/ss
   printf 'The live profile must not enable SSH by default.\n' >&2
   exit 1
 fi
-install -Dm755 "$config_cli" \
-  "${profile_copy}/airootfs/usr/local/bin/linxira-config"
-install -Dm755 "$package_center_source/src/linxira-package-center" \
-  "${profile_copy}/airootfs/usr/bin/linxira-package-center"
-install -Dm644 "$package_center_source/data/org.linxira.PackageCenter.desktop" \
-  "${profile_copy}/airootfs/usr/share/applications/org.linxira.PackageCenter.desktop"
-install -Dm755 "$components_source/scripts/linxira-components" \
-  "${profile_copy}/airootfs/usr/bin/linxira-components"
-mkdir -p "${profile_copy}/airootfs/usr/lib/linxira-components"
-cp -a "$components_source/src/linxira_components" \
-  "${profile_copy}/airootfs/usr/lib/linxira-components/"
-find "${profile_copy}/airootfs/usr/lib/linxira-components" \
-  -type d -name __pycache__ -prune -exec rm -rf {} +
-install -Dm755 "$welcome_source/src/linxira-welcome" \
-  "${profile_copy}/airootfs/usr/bin/linxira-welcome"
-install -Dm644 "$welcome_source/data/org.linxira.Welcome.desktop" \
-  "${profile_copy}/airootfs/usr/share/applications/org.linxira.Welcome.desktop"
-install -Dm644 "$welcome_source/data/autostart/org.linxira.Welcome.desktop" \
-  "${profile_copy}/airootfs/etc/xdg/autostart/org.linxira.Welcome.desktop"
-for translation in "$welcome_source"/data/i18n/*.json; do
-  install -Dm644 "$translation" \
-    "${profile_copy}/airootfs/usr/share/linxira/welcome/i18n/$(basename "$translation")"
-done
-install -Dm644 "$catalog_source/catalog/catalog-v2.json" \
-  "${profile_copy}/airootfs/usr/share/linxira/catalog/catalog-v2.json"
-install -Dm644 "$catalog_source/schema/catalog-v2.schema.json" \
-  "${profile_copy}/airootfs/usr/share/linxira/catalog/catalog-v2.schema.json"
 while IFS='|' read -r link_path link_target; do
   link_target=${link_target%$'\r'}
   [[ -n "$link_path" && -n "$link_target" ]] || continue
@@ -173,13 +206,23 @@ done <"${profile_copy}/profile-symlinks.list"
 
 repo_dir="${profile_copy}/linxira-local-repo/x86_64"
 mkdir -p "$repo_dir" "$output_dir"
-install -Dm644 "$shelly_package" "${repo_dir}/$(basename "$shelly_package")"
-install -Dm644 "$calamares_package" "${repo_dir}/$(basename "$calamares_package")"
-install -Dm644 "$artwork_package" "${repo_dir}/$(basename "$artwork_package")"
-repo-add "${repo_dir}/linxira-local.db.tar.zst" \
-  "${repo_dir}/$(basename "$shelly_package")" \
-  "${repo_dir}/$(basename "$calamares_package")" \
-  "${repo_dir}/$(basename "$artwork_package")"
+package_artifacts=(
+  "$shelly_package"
+  "$calamares_package"
+  "$artwork_package"
+  "$catalog_package"
+  "$components_package"
+  "$config_hub_package"
+  "$package_center_package"
+  "$welcome_package"
+)
+repo_artifacts=()
+for artifact in "${package_artifacts[@]}"; do
+  destination="${repo_dir}/$(basename "$artifact")"
+  install -Dm644 "$artifact" "$destination"
+  repo_artifacts+=("$destination")
+done
+repo-add "${repo_dir}/linxira-local.db.tar.zst" "${repo_artifacts[@]}"
 
 sed -i "s|@LINXIRA_LOCAL_REPO@|${profile_copy}/linxira-local-repo|g" "${profile_copy}/pacman.conf"
 if grep -q '@LINXIRA_LOCAL_REPO@' "${profile_copy}/pacman.conf"; then

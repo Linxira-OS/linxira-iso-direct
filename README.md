@@ -1,7 +1,7 @@
 # Direct-Arch ISO Profile
 
-This profile builds a development installer ISO from Arch packages plus locally
-built Calamares, Shelly, and Linxira artwork packages. Discover is deliberately
+This profile builds a development installer ISO from Arch packages plus pinned
+local artifacts for Calamares, Shelly, artwork, and Linxira system software. Discover is deliberately
 excluded. Linxira Package Center is the catalog application installer; Shelly
 remains available for reviewed recommendations and package browsing. Package
 Center creates application plans and confirmations, then authorizes the
@@ -18,15 +18,21 @@ Build with a verified local package artifact:
   --shelly-package /path/to/shelly-2.4.1.4-1-x86_64.pkg.tar.zst \
   --calamares-package /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
   --artwork-package /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
+  --catalog-package /path/to/linxira-catalog-2.0.0-3-any.pkg.tar.zst \
+  --components-package /path/to/linxira-components-0.2.0-1-any.pkg.tar.zst \
+  --config-hub-package /path/to/linxira-config-hub-2.1.0-1-any.pkg.tar.zst \
+  --package-center-package /path/to/linxira-package-center-0.1.0-1-any.pkg.tar.zst \
+  --welcome-package /path/to/linxira-welcome-1.0.0-2-any.pkg.tar.zst \
   --plymouth-theme-directory /path/to/linxira-plymouth-theme \
   --output ./out
 ```
 
-The wrapper injects the reviewed catalog, Config Hub, Package Center and the
-`linxira-components` Python backend into both Live and installed targets. It
-then copies the profile to a temporary directory and creates two
-repositories. `linxira-local` is a build-only repository for Calamares, Shelly,
-and the canonical artwork package and is removed afterward. `linxira-offline`
+The wrapper validates each package identity and critical archive path, then
+copies the profile to a temporary directory and creates two repositories.
+`linxira-local` is a build-only repository for all supplied artifacts and is
+removed afterward. Live and target environments install the same Linxira-owned
+files through pacman; the build never copies sibling working-tree source.
+`linxira-offline`
 contains the exact target package closure from a fresh build-scoped cache and is embedded under
 `/opt/linxira/offline-repo`; Calamares uses it without copying that repository
 configuration into the target.

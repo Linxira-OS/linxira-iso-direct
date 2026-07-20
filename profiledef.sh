@@ -24,9 +24,5 @@ file_permissions=(
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
   ["/usr/local/bin/linxira-installer-shell"]="0:0:755"
-  ["/usr/local/bin/linxira-config"]="0:0:755"
-  ["/usr/bin/linxira-package-center"]="0:0:755"
-  ["/usr/bin/linxira-components"]="0:0:755"
   ["/usr/local/bin/linxira-live-session"]="0:0:755"
-  ["/usr/bin/linxira-welcome"]="0:0:755"
 )

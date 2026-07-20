@@ -174,6 +174,26 @@ class LiveSessionTests(unittest.TestCase):
         self.assertNotIn("calamares", target_packages)
         self.assertNotIn("archiso", target_packages)
 
+    def test_system_software_is_package_owned_in_live_and_target(self):
+        live_packages = set(LIVE_PACKAGES.read_text(encoding="utf-8").splitlines())
+        target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        artifact_contracts = {
+            "catalog_package": "linxira-catalog",
+            "components_package": "linxira-components",
+            "config_hub_package": "linxira-config-hub",
+            "package_center_package": "linxira-package-center",
+            "welcome_package": "linxira-welcome",
+        }
+        system_packages = set(artifact_contracts.values())
+        self.assertTrue(system_packages.issubset(live_packages))
+        self.assertTrue(system_packages.issubset(target_packages))
+        build = BUILD_SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn('profile_dir}/../linxira-', build)
+        for variable, package in artifact_contracts.items():
+            self.assertIn(
+                f'validate_package_artifact "${variable}" {package}', build
+            )
+
     def test_initramfs_integration_covers_both_kernels(self):
         script = (
             PROFILE_ROOT / "scripts/test-initramfs-target.sh"
