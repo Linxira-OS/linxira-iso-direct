@@ -40,6 +40,14 @@ class CatalogTests(unittest.TestCase):
         self.assertFalse((LOCAL_MODULES_PATH / "linxiraoptional/main.py").exists())
         self.assertFalse((LOCAL_MODULES_PATH / "linxiraoptional/module.desc").exists())
 
+    def test_installer_declares_the_native_catalog_viewmodule(self):
+        settings = SETTINGS_PATH.read_text(encoding="utf-8")
+        self.assertIn("- linxirasoftware", settings)
+        self.assertEqual(
+            (MODULES_PATH / "linxirasoftware.conf").read_text(encoding="utf-8").splitlines()[1],
+            'catalogPath: "/usr/share/linxira/catalog/catalog-v3.json"',
+        )
+
     def test_installer_uses_fixed_plasma_and_v3_post_install_surfaces(self):
         packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
         self.assertTrue(

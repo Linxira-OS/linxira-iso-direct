@@ -145,7 +145,9 @@ package_center_package=$(realpath "$package_center_package")
 welcome_package=$(realpath "$welcome_package")
 plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
 validate_package_artifact "$shelly_package" shelly
-validate_package_artifact "$calamares_package" calamares
+validate_package_artifact "$calamares_package" calamares \
+  usr/lib/calamares/modules/linxirasoftware/libcalamares_viewmodule_linxirasoftware.so \
+  usr/lib/calamares/modules/linxirasoftware/module.desc
 validate_package_artifact "$artwork_package" linxira-artwork \
   usr/share/doc/linxira-artwork/TRADEMARKS.md
 validate_package_artifact "$catalog_package" linxira-catalog \

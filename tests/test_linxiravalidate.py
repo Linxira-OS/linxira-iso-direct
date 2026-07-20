@@ -28,6 +28,10 @@ class InstalledSystemValidationTests(unittest.TestCase):
         ):
             self.assertIn(value, source)
 
+    def test_validator_requires_installer_selection_receipt(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn('"/var/lib/linxira/installer-selection.json"', source)
+
     def test_obsolete_initcpio_module_spellings_are_found_in_all_config_locations(self):
         with tempfile.TemporaryDirectory() as temporary_root:
             root = Path(temporary_root)

@@ -80,6 +80,14 @@ class ConfigCliTests(unittest.TestCase):
         self.assertIn("usr/share/doc/linxira-artwork/TRADEMARKS.md", build)
         self.assertNotIn('"/usr/share/doc/linxira-artwork/TRADEMARKS.md"', branding)
 
+    def test_build_requires_native_installer_tree_plugin(self):
+        build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            "usr/lib/calamares/modules/linxirasoftware/libcalamares_viewmodule_linxirasoftware.so",
+            build,
+        )
+        self.assertIn("usr/lib/calamares/modules/linxirasoftware/module.desc", build)
+
 
 if __name__ == "__main__":
     unittest.main()
