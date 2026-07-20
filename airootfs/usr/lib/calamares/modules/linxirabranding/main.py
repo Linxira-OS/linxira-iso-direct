@@ -92,11 +92,11 @@ def run():
         _copy_file("/usr/share/linxira/catalog/catalog-v2.schema.json", root)
         _copy_file("/usr/share/doc/linxira-artwork/TRADEMARKS.md", root)
         _copy_file("/usr/local/bin/linxira-config", root)
-        _copy_file("/usr/bin/linxira-software-center", root)
+        _copy_file("/usr/bin/linxira-package-center", root)
         _copy_file("/usr/bin/linxira-components", root)
         _copy_file("/usr/bin/linxira-welcome", root)
         _copy_file("/usr/share/applications/org.linxira.Welcome.desktop", root)
-        _copy_file("/usr/share/applications/linxira-software-center.desktop", root)
+        _copy_file("/usr/share/applications/org.linxira.PackageCenter.desktop", root)
         _copy_file("/etc/xdg/autostart/org.linxira.Welcome.desktop", root)
         shutil.copytree(
             "/usr/lib/linxira-components",

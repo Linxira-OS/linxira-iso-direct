@@ -4,7 +4,7 @@ import unittest
 
 PROFILE_ROOT = Path(__file__).parents[1]
 CONFIG_CLI = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-config"
-SOFTWARE_CENTER = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-software-center"
+PACKAGE_CENTER = PROFILE_ROOT.parent / "linxira-package-center/src/linxira-package-center"
 
 
 class ConfigCliTests(unittest.TestCase):
@@ -37,8 +37,8 @@ class ConfigCliTests(unittest.TestCase):
         self.assertIn("a per-user TigerVNC session and firewall policy must be implemented first", script)
         self.assertNotIn("pacman -S --noconfirm xrdp", script)
 
-    def test_software_center_owns_the_catalog_install_transaction(self):
-        script = SOFTWARE_CENTER.read_text(encoding="utf-8")
+    def test_package_center_owns_the_catalog_install_transaction(self):
+        script = PACKAGE_CENTER.read_text(encoding="utf-8")
         self.assertIn("catalog-v2.json", script)
         self.assertIn(".applications[]", script)
         live_packages = (PROFILE_ROOT / "packages.x86_64").read_text(encoding="utf-8")
@@ -50,8 +50,8 @@ class ConfigCliTests(unittest.TestCase):
         self.assertIn("--application", script)
         self.assertNotIn("CONFIG_CLI", script)
 
-    def test_software_center_selects_individual_applications_by_category(self):
-        script = SOFTWARE_CENTER.read_text(encoding="utf-8")
+    def test_package_center_selects_individual_applications_by_category(self):
+        script = PACKAGE_CENTER.read_text(encoding="utf-8")
         self.assertIn(".applications[]", script)
         self.assertIn(".categories", script)
         self.assertIn(".installer == true", script)

@@ -96,7 +96,7 @@ class LiveSessionTests(unittest.TestCase):
 
     def test_welcome_exposes_package_center_config_and_source_categories(self):
         script = WELCOME.read_text(encoding="utf-8")
-        self.assertIn('"package_center": ("/usr/bin/linxira-software-center", [])', script)
+        self.assertIn('"package_center": ("/usr/bin/linxira-package-center", [])', script)
         self.assertIn('"mirrors": ("/usr/bin/konsole"', script)
         self.assertIn('"miniforge": ("/usr/bin/konsole"', script)
         self.assertIn('self._setup_page()', script)

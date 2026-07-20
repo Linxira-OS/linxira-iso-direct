@@ -7,7 +7,7 @@ usage() {
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 config_cli="${profile_dir}/../linxira-config-hub/cli/linxira-config"
-software_center="${profile_dir}/../linxira-config-hub/cli/linxira-software-center"
+package_center_source="${profile_dir}/../linxira-package-center"
 welcome_source="${profile_dir}/../linxira-welcome"
 catalog_source="${profile_dir}/../linxira-catalog"
 components_source="${profile_dir}/../linxira-components"
@@ -56,7 +56,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ! -f "$config_cli" ||
-      ! -f "$software_center" ||
+      ! -f "$package_center_source/src/linxira-package-center" ||
+      ! -f "$package_center_source/data/org.linxira.PackageCenter.desktop" ||
       ! -f "$welcome_source/src/linxira-welcome" ||
       ! -f "$welcome_source/data/org.linxira.Welcome.desktop" ||
       ! -f "$welcome_source/data/autostart/org.linxira.Welcome.desktop" ||
@@ -130,8 +131,10 @@ if [[ -e "${profile_copy}/airootfs/etc/systemd/system/multi-user.target.wants/ss
 fi
 install -Dm755 "$config_cli" \
   "${profile_copy}/airootfs/usr/local/bin/linxira-config"
-install -Dm755 "$software_center" \
-  "${profile_copy}/airootfs/usr/bin/linxira-software-center"
+install -Dm755 "$package_center_source/src/linxira-package-center" \
+  "${profile_copy}/airootfs/usr/bin/linxira-package-center"
+install -Dm644 "$package_center_source/data/org.linxira.PackageCenter.desktop" \
+  "${profile_copy}/airootfs/usr/share/applications/org.linxira.PackageCenter.desktop"
 install -Dm755 "$components_source/scripts/linxira-components" \
   "${profile_copy}/airootfs/usr/bin/linxira-components"
 mkdir -p "${profile_copy}/airootfs/usr/lib/linxira-components"
