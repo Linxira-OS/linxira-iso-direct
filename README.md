@@ -53,6 +53,13 @@ with the documented subvolumes, GRUB, `linux` plus `linux-lts`, Plasma, and
 Shelly. It validates required packages, kernels, GRUB configuration, Btrfs
 mounts, and absence of live-installer content before reporting success.
 
+The installer intentionally uses the fixed, offline Plasma baseline. Legacy
+flat desktop, component, and application chooser pages were removed because
+they used Catalog v2 and could start an unfrozen online package transaction.
+After first boot, Package Center and Component Manager are the canonical
+Catalog v3 selection surfaces. An inline installer tree requires a native
+Calamares Qt viewmodule and is tracked separately.
+
 This slice still requires disposable-VM installation and boot acceptance. BIOS,
 encryption, the responsive kernel profile, signed offline metadata, and initial
 Timeshift snapshot creation remain release blockers.

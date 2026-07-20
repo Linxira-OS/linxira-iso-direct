@@ -1,7 +1,0 @@
----
-type: job
-name: linxiraoptional
-interface: python
-script: main.py
-weight: 20
-noconfig: true

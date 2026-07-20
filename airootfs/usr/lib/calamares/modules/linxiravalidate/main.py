@@ -89,7 +89,6 @@ def run():
         "/usr/share/linxira/catalog/catalog-v3.json",
         "/usr/share/linxira/catalog/catalog-v3.schema.json",
         "/usr/share/linxira/welcome/i18n/zh_CN.json",
-        "/var/lib/linxira/installer-selection.json",
     )
     for path in required_paths:
         target_path = _target_path(root, path)
