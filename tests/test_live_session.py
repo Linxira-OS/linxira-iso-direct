@@ -158,10 +158,35 @@ class LiveSessionTests(unittest.TestCase):
         self.assertNotIn("       - partition", settings)
         self.assertNotIn("       - packagechooser@desktop", settings)
 
+    def test_initramfs_jobs_are_ordered_and_consolefont_is_removed(self):
+        settings = (PROFILE_ROOT / "airootfs/etc/calamares/settings.conf").read_text(encoding="utf-8")
+        initcpiocfg = (
+            PROFILE_ROOT / "airootfs/etc/calamares/modules/initcpiocfg.conf"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "      - initcpiocfg\n      - linxirabranding\n      - initcpio",
+            settings,
+        )
+        self.assertIn("  remove:\n    - consolefont\n", initcpiocfg)
+
     def test_target_manifest_excludes_live_installer_packages(self):
         target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
         self.assertNotIn("calamares", target_packages)
         self.assertNotIn("archiso", target_packages)
+
+    def test_initramfs_integration_covers_both_kernels(self):
+        script = (
+            PROFILE_ROOT / "scripts/test-initramfs-target.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("base btrfs-progs linux linux-lts", script)
+        self.assertIn('mkfs.btrfs -q -f "$filesystem_image"', script)
+        self.assertIn('mount -o loop "$filesystem_image" "$target"', script)
+        self.assertIn('test -s "$target/etc/mkinitcpio.d/linux.preset"', script)
+        self.assertIn('test -s "$target/etc/mkinitcpio.d/linux-lts.preset"', script)
+        self.assertIn('arch-chroot "$target" mkinitcpio -P', script)
+        self.assertIn("grep -q '^==> ERROR:'", script)
+        self.assertIn('test -s "$target/boot/initramfs-linux.img"', script)
+        self.assertIn('test -s "$target/boot/initramfs-linux-lts.img"', script)
 
     def test_target_validator_rejects_live_only_paths(self):
         validator = (
@@ -176,6 +201,10 @@ class LiveSessionTests(unittest.TestCase):
             "/usr/local/bin/linxira-live-session",
         ):
             self.assertIn(path, validator)
+
+        self.assertIn("/boot/initramfs-linux.img", validator)
+        self.assertIn("/boot/initramfs-linux-lts.img", validator)
+        self.assertIn("crc32c(?:-|_)intel", validator)
 
 
 if __name__ == "__main__":

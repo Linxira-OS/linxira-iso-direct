@@ -53,7 +53,8 @@ def _remove_obsolete_modules(mkinitcpio_path):
         raise RuntimeError("MODULES is missing from /etc/mkinitcpio.conf")
 
     modules = shlex.split(match.group(1))
-    modules = [module for module in modules if module != "crc32c_intel"]
+    obsolete_modules = {"crc32c-intel", "crc32c_intel"}
+    modules = [module for module in modules if module not in obsolete_modules]
     replacement = "MODULES=(" + " ".join(modules) + ")"
     contents = contents[:match.start()] + replacement + contents[match.end():]
     mkinitcpio_path.write_text(contents, encoding="utf-8")

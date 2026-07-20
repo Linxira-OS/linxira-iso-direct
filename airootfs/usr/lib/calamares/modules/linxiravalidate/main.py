@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 
 import os
+from pathlib import Path
+import re
 import subprocess
 
 import libcalamares
+
+
+OBSOLETE_INITCPIO_MODULE = re.compile(
+    r"(?<![A-Za-z0-9_-])crc32c(?:-|_)intel(?![A-Za-z0-9_-])"
+)
 
 
 def pretty_name():
@@ -12,6 +19,21 @@ def pretty_name():
 
 def _target_path(root, path):
     return os.path.join(root, path.lstrip("/"))
+
+
+def _obsolete_initcpio_configs(root):
+    root_path = Path(root)
+    candidates = [root_path / "etc/mkinitcpio.conf"]
+    candidates.extend((root_path / "etc/mkinitcpio.conf.d").glob("*.conf"))
+    candidates.extend((root_path / "etc/mkinitcpio.d").glob("*.preset"))
+
+    obsolete = []
+    for path in candidates:
+        if not path.is_file():
+            continue
+        if OBSOLETE_INITCPIO_MODULE.search(path.read_text(encoding="utf-8")):
+            obsolete.append("/" + path.relative_to(root_path).as_posix())
+    return obsolete
 
 
 def run():
@@ -42,6 +64,8 @@ def run():
 
     required_paths = (
         "/boot/grub/grub.cfg",
+        "/boot/initramfs-linux.img",
+        "/boot/initramfs-linux-lts.img",
         "/boot/vmlinuz-linux",
         "/boot/vmlinuz-linux-lts",
         "/etc/fstab",
@@ -50,8 +74,14 @@ def run():
         "/var/lib/linxira/installer-selection.json",
     )
     for path in required_paths:
-        if not os.path.isfile(_target_path(root, path)):
+        target_path = _target_path(root, path)
+        if not os.path.isfile(target_path):
             failures.append("missing file: " + path)
+        elif path.startswith("/boot/initramfs-") and os.path.getsize(target_path) == 0:
+            failures.append("empty initramfs: " + path)
+
+    for path in _obsolete_initcpio_configs(root):
+        failures.append("obsolete initramfs module in: " + path)
 
     fstab_path = _target_path(root, "/etc/fstab")
     if os.path.isfile(fstab_path):

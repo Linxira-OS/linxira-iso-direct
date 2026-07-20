@@ -48,21 +48,22 @@ class BrandingConfigurationTests(unittest.TestCase):
 
             self.assertEqual(vconsole.read_text(encoding="utf-8"), 'KEYMAP="de-latin1"\n')
 
-    def test_initramfs_configuration_removes_obsolete_module_and_adds_plymouth(self):
+    def test_initramfs_configuration_removes_obsolete_modules_and_adds_plymouth(self):
         with tempfile.TemporaryDirectory() as temporary_root:
             mkinitcpio = Path(temporary_root) / "mkinitcpio.conf"
             mkinitcpio.write_text(
-                "MODULES=(amdgpu crc32c_intel)\n"
+                "MODULES=(amdgpu crc32c-intel crc32c_intel crc32c)\n"
                 "HOOKS=(base systemd autodetect keyboard filesystems)\n",
                 encoding="utf-8",
             )
 
             linxirabranding._remove_obsolete_modules(mkinitcpio)
             linxirabranding._enable_plymouth(mkinitcpio)
+            linxirabranding._remove_obsolete_modules(mkinitcpio)
 
             self.assertEqual(
                 mkinitcpio.read_text(encoding="utf-8"),
-                "MODULES=(amdgpu)\n"
+                "MODULES=(amdgpu crc32c)\n"
                 "HOOKS=(base systemd plymouth autodetect keyboard filesystems)\n",
             )
 
