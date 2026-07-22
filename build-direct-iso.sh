@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --chwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -16,6 +16,8 @@ completion_agent_package=''
 config_hub_package=''
 package_center_package=''
 gaming_manager_package=''
+chwd_detector_package=''
+hardware_driver_manager_package=''
 recovery_diagnostics_package=''
 update_package=''
 welcome_package=''
@@ -79,6 +81,16 @@ while [[ $# -gt 0 ]]; do
       recovery_diagnostics_package=$2
       shift 2
       ;;
+    --chwd-detector-package)
+      [[ $# -ge 2 ]] || usage
+      chwd_detector_package=$2
+      shift 2
+      ;;
+    --hardware-driver-manager-package)
+      [[ $# -ge 2 ]] || usage
+      hardware_driver_manager_package=$2
+      shift 2
+      ;;
     --update-package)
       [[ $# -ge 2 ]] || usage
       update_package=$2
@@ -120,6 +132,8 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$config_hub_package" || ! -f "$config_hub_package" ||
       -z "$package_center_package" || ! -f "$package_center_package" ||
        -z "$gaming_manager_package" || ! -f "$gaming_manager_package" ||
+       -z "$chwd_detector_package" || ! -f "$chwd_detector_package" ||
+       -z "$hardware_driver_manager_package" || ! -f "$hardware_driver_manager_package" ||
        -z "$recovery_diagnostics_package" || ! -f "$recovery_diagnostics_package" ||
       -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
@@ -151,6 +165,15 @@ validate_package_artifact() {
     fi
   done
 }
+validate_package_version() {
+  local artifact=$1 expected=$2 actual_name actual_version
+  read -r actual_name actual_version < <(pacman -Qp "$artifact")
+  if [[ $actual_version != "$expected" ]]; then
+    printf '%s artifact version is %s instead of %s\n' \
+      "$actual_name" "$actual_version" "$expected" >&2
+    exit 1
+  fi
+}
 command -v mkarchiso >/dev/null
 command -v pacman >/dev/null
 command -v repo-add >/dev/null
@@ -172,6 +195,8 @@ completion_agent_package=$(realpath "$completion_agent_package")
 config_hub_package=$(realpath "$config_hub_package")
 package_center_package=$(realpath "$package_center_package")
 gaming_manager_package=$(realpath "$gaming_manager_package")
+chwd_detector_package=$(realpath "$chwd_detector_package")
+hardware_driver_manager_package=$(realpath "$hardware_driver_manager_package")
 recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
@@ -203,6 +228,7 @@ validate_package_artifact "$components_package" linxira-components \
   usr/share/dbus-1/system-services/org.linxira.Components1.service \
   usr/share/polkit-1/actions/org.linxira.components.policy \
   usr/share/licenses/linxira-components/LICENSE
+validate_package_version "$components_package" 0.5.0-1
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
@@ -223,6 +249,17 @@ validate_package_artifact "$gaming_manager_package" linxira-gaming-manager \
   usr/bin/linxira-gaming-manager \
   usr/share/applications/org.linxira.GamingManager.desktop \
   usr/share/licenses/linxira-gaming-manager/LICENSE
+validate_package_artifact "$chwd_detector_package" linxira-chwd-detector \
+  usr/bin/linxira-chwd-detector \
+  usr/share/doc/linxira-chwd-detector/UPSTREAM.md \
+  usr/share/licenses/linxira-chwd-detector/LICENSE
+validate_package_version "$chwd_detector_package" 0.1.0-1
+validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-driver-manager \
+  usr/bin/linxira-hardware-driver-manager \
+  usr/share/applications/org.linxira.HardwareDriverManager.desktop \
+  usr/share/metainfo/org.linxira.HardwareDriverManager.metainfo.xml \
+  usr/share/licenses/linxira-hardware-driver-manager/LICENSE
+validate_package_version "$hardware_driver_manager_package" 0.2.0-1
 validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagnostics \
   usr/bin/linxira-recovery-diagnostics \
   usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \
@@ -297,6 +334,8 @@ package_artifacts=(
   "$config_hub_package"
   "$package_center_package"
   "$gaming_manager_package"
+  "$chwd_detector_package"
+  "$hardware_driver_manager_package"
   "$recovery_diagnostics_package"
   "$update_package"
   "$welcome_package"

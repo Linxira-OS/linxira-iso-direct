@@ -221,6 +221,8 @@ class LiveSessionTests(unittest.TestCase):
             "components_package": "linxira-components",
             "config_hub_package": "linxira-config-hub",
             "gaming_manager_package": "linxira-gaming-manager",
+            "chwd_detector_package": "linxira-chwd-detector",
+            "hardware_driver_manager_package": "linxira-hardware-driver-manager",
             "recovery_diagnostics_package": "linxira-recovery-diagnostics",
             "package_center_package": "linxira-package-center",
             "update_package": "linxira-update",
@@ -235,6 +237,12 @@ class LiveSessionTests(unittest.TestCase):
             self.assertIn(
                 f'validate_package_artifact "${variable}" {package}', build
             )
+        for variable, version in (
+            ("components_package", "0.5.0-1"),
+            ("chwd_detector_package", "0.1.0-1"),
+            ("hardware_driver_manager_package", "0.2.0-1"),
+        ):
+            self.assertIn(f'validate_package_version "${variable}" {version}', build)
 
     def test_initramfs_integration_covers_both_kernels(self):
         script = (

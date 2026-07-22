@@ -29,11 +29,13 @@ linux-lts
 linux-lts-headers
 linxira-artwork
 linxira-catalog
+linxira-chwd-detector
 linxira-component-manager
 linxira-completion-agent
 linxira-components
 linxira-config-hub
 linxira-gaming-manager
+linxira-hardware-driver-manager
 linxira-recovery-diagnostics
 linxira-package-center
 linxira-update

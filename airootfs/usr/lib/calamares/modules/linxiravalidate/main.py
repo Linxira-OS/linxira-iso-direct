@@ -101,6 +101,18 @@ def _package_installed(root, package):
     return result.returncode == 0
 
 
+def _package_version(root, package):
+    result = subprocess.run(
+        ["arch-chroot", root, "pacman", "-Q", package],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        text=True,
+    )
+    fields = result.stdout.strip().split()
+    return fields[1] if result.returncode == 0 and len(fields) == 2 and fields[0] == package else None
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     failures = []
@@ -121,11 +133,13 @@ def run():
         "sddm",
         "linxira-artwork",
         "linxira-catalog",
+        "linxira-chwd-detector",
         "linxira-component-manager",
         "linxira-completion-agent",
         "linxira-components",
         "linxira-config-hub",
         "linxira-gaming-manager",
+        "linxira-hardware-driver-manager",
         "linxira-recovery-diagnostics",
         "linxira-package-center",
         "linxira-update",
@@ -139,6 +153,17 @@ def run():
     for package in required_packages:
         if not _package_installed(root, package):
             failures.append("missing package: " + package)
+    required_versions = {
+        "linxira-chwd-detector": "0.1.0-1",
+        "linxira-components": "0.5.0-1",
+        "linxira-hardware-driver-manager": "0.2.0-1",
+    }
+    for package, version in required_versions.items():
+        installed = _package_version(root, package)
+        if installed is None:
+            failures.append("could not verify package version: " + package)
+        elif installed != version:
+            failures.append(f"unexpected package version: {package} {installed} (expected {version})")
     if _package_installed(root, "gdm"):
         failures.append("unsupported display manager installed: gdm")
 
@@ -154,6 +179,8 @@ def run():
         "/usr/bin/linxira-completion-agent",
         "/usr/bin/linxira-components",
         "/usr/bin/linxira-gaming-manager",
+        "/usr/bin/linxira-chwd-detector",
+        "/usr/bin/linxira-hardware-driver-manager",
         "/usr/bin/linxira-recovery-diagnostics",
         "/usr/bin/linxira-package-center",
         "/usr/bin/linxira-update",
@@ -161,6 +188,7 @@ def run():
         "/usr/share/applications/org.linxira.PackageCenter.desktop",
         "/usr/share/applications/org.linxira.ComponentManager.desktop",
         "/usr/share/applications/org.linxira.GamingManager.desktop",
+        "/usr/share/applications/org.linxira.HardwareDriverManager.desktop",
         "/usr/share/applications/org.linxira.RecoveryDiagnostics.desktop",
         "/usr/bin/linxira-components-service",
         "/usr/lib/systemd/system/linxira-components.service",
