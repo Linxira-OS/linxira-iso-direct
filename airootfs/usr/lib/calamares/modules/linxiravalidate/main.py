@@ -155,8 +155,8 @@ def run():
             failures.append("missing package: " + package)
     required_versions = {
         "linxira-chwd-detector": "0.1.0-1",
-        "linxira-components": "0.6.0-1",
-        "linxira-hardware-driver-manager": "0.3.0-1",
+        "linxira-components": "0.7.0-1",
+        "linxira-hardware-driver-manager": "0.4.0-1",
     }
     for package, version in required_versions.items():
         installed = _package_version(root, package)

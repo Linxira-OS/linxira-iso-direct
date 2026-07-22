@@ -230,7 +230,7 @@ validate_package_artifact "$components_package" linxira-components \
   usr/share/dbus-1/system-services/org.linxira.Components1.service \
   usr/share/polkit-1/actions/org.linxira.components.policy \
   usr/share/licenses/linxira-components/LICENSE
-validate_package_version "$components_package" 0.6.0-1
+validate_package_version "$components_package" 0.7.0-1
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
@@ -261,7 +261,7 @@ validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-dr
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
   usr/share/metainfo/org.linxira.HardwareDriverManager.metainfo.xml \
   usr/share/licenses/linxira-hardware-driver-manager/LICENSE
-validate_package_version "$hardware_driver_manager_package" 0.3.0-1
+validate_package_version "$hardware_driver_manager_package" 0.4.0-1
 validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagnostics \
   usr/bin/linxira-recovery-diagnostics \
   usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \
