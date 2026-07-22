@@ -20,10 +20,11 @@ Build with a verified local package artifact:
   --calamares-package /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
   --artwork-package /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
   --catalog-package /path/to/linxira-catalog-3.0.0-1-any.pkg.tar.zst \
-  --components-package /path/to/linxira-components-0.3.0-1-any.pkg.tar.zst \
+  --components-package /path/to/linxira-components-0.4.0-1-any.pkg.tar.zst \
   --component-manager-package /path/to/linxira-component-manager-0.1.0-1-any.pkg.tar.zst \
   --completion-agent-package /path/to/linxira-completion-agent-0.1.1-1-any.pkg.tar.zst \
-  --gaming-manager-package /path/to/linxira-gaming-manager-0.2.0-1-any.pkg.tar.zst \
+  --gaming-manager-package /path/to/linxira-gaming-manager-0.3.0-1-any.pkg.tar.zst \
+  --recovery-diagnostics-package /path/to/linxira-recovery-diagnostics-0.2.0-1-any.pkg.tar.zst \
   --update-package /path/to/linxira-update-0.1.0-1-any.pkg.tar.zst \
   --config-hub-package /path/to/linxira-config-hub-2.2.0-1-any.pkg.tar.zst \
   --package-center-package /path/to/linxira-package-center-0.2.1-1-any.pkg.tar.zst \

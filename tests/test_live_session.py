@@ -221,6 +221,7 @@ class LiveSessionTests(unittest.TestCase):
             "components_package": "linxira-components",
             "config_hub_package": "linxira-config-hub",
             "gaming_manager_package": "linxira-gaming-manager",
+            "recovery_diagnostics_package": "linxira-recovery-diagnostics",
             "package_center_package": "linxira-package-center",
             "update_package": "linxira-update",
             "welcome_package": "linxira-welcome",

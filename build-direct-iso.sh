@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --update-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -16,6 +16,7 @@ completion_agent_package=''
 config_hub_package=''
 package_center_package=''
 gaming_manager_package=''
+recovery_diagnostics_package=''
 update_package=''
 welcome_package=''
 plymouth_theme_directory=''
@@ -73,6 +74,11 @@ while [[ $# -gt 0 ]]; do
       gaming_manager_package=$2
       shift 2
       ;;
+    --recovery-diagnostics-package)
+      [[ $# -ge 2 ]] || usage
+      recovery_diagnostics_package=$2
+      shift 2
+      ;;
     --update-package)
       [[ $# -ge 2 ]] || usage
       update_package=$2
@@ -113,7 +119,8 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$completion_agent_package" || ! -f "$completion_agent_package" ||
       -z "$config_hub_package" || ! -f "$config_hub_package" ||
       -z "$package_center_package" || ! -f "$package_center_package" ||
-      -z "$gaming_manager_package" || ! -f "$gaming_manager_package" ||
+       -z "$gaming_manager_package" || ! -f "$gaming_manager_package" ||
+       -z "$recovery_diagnostics_package" || ! -f "$recovery_diagnostics_package" ||
       -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
       -z "$plymouth_theme_directory" ||
@@ -165,6 +172,7 @@ completion_agent_package=$(realpath "$completion_agent_package")
 config_hub_package=$(realpath "$config_hub_package")
 package_center_package=$(realpath "$package_center_package")
 gaming_manager_package=$(realpath "$gaming_manager_package")
+recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
 plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
@@ -182,6 +190,7 @@ validate_package_artifact "$catalog_package" linxira-catalog \
   usr/share/licenses/linxira-catalog/LICENSE
 validate_package_artifact "$components_package" linxira-components \
   usr/bin/linxira-components \
+  usr/bin/linxira-components-service \
   usr/lib/linxira-components/linxira_components/__main__.py \
   usr/lib/linxira-components/linxira_components/schemas/receipt-v1.schema.json \
   usr/lib/linxira-components/linxira_components/schemas/catalog-v3.schema.json \
@@ -189,6 +198,10 @@ validate_package_artifact "$components_package" linxira-components \
   usr/lib/linxira-components/linxira_components/schemas/request-plan-v2.schema.json \
   usr/lib/linxira-components/linxira_components/schemas/confirmation-v2.schema.json \
   usr/lib/linxira-components/linxira_components/schemas/receipt-v2.schema.json \
+  usr/lib/systemd/system/linxira-components.service \
+  usr/share/dbus-1/system.d/org.linxira.Components1.conf \
+  usr/share/dbus-1/system-services/org.linxira.Components1.service \
+  usr/share/polkit-1/actions/org.linxira.components.policy \
   usr/share/licenses/linxira-components/LICENSE
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
@@ -210,6 +223,11 @@ validate_package_artifact "$gaming_manager_package" linxira-gaming-manager \
   usr/bin/linxira-gaming-manager \
   usr/share/applications/org.linxira.GamingManager.desktop \
   usr/share/licenses/linxira-gaming-manager/LICENSE
+validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagnostics \
+  usr/bin/linxira-recovery-diagnostics \
+  usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \
+  usr/share/metainfo/org.linxira.RecoveryDiagnostics.metainfo.xml \
+  usr/share/licenses/linxira-recovery-diagnostics/LICENSE
 validate_package_artifact "$update_package" linxira-update \
   usr/bin/linxira-update \
   etc/xdg/autostart/linxira-update-tray.desktop \
@@ -225,8 +243,8 @@ if ! bsdtar -tf "$artwork_package" | grep -qx 'usr/share/doc/linxira-artwork/TRA
   printf 'The artwork artifact does not contain the Linxira brand policy.\n' >&2
   exit 1
 fi
-if bsdtar -tf "$components_package" | grep -Eq '(__pycache__|\.pyc$|^usr/share/(dbus-1|polkit-1)/)'; then
-  printf 'The components artifact contains generated bytecode or draft privileged integration.\n' >&2
+if bsdtar -tf "$components_package" | grep -Eq '(__pycache__|\.pyc$)'; then
+  printf 'The components artifact contains generated bytecode.\n' >&2
   exit 1
 fi
 if bsdtar -tf "$component_manager_package" | grep -Eq '(__pycache__|\.pyc$)'; then
@@ -279,6 +297,7 @@ package_artifacts=(
   "$config_hub_package"
   "$package_center_package"
   "$gaming_manager_package"
+  "$recovery_diagnostics_package"
   "$update_package"
   "$welcome_package"
 )

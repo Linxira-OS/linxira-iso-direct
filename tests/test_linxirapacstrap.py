@@ -74,13 +74,12 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["selectedPackages"], [])
         self.assertEqual(result["satisfiedItems"], ["desktop-plasma"])
 
-    def test_gnome_installs_exact_candidate_cohort(self):
+    def test_unverified_gnome_selection_fails_closed(self):
         selection = self.selection(
             {"desktop-gnome": "desktop-environments/desktop-gnome"}
         )
-        result = self.validate(selection)
-        self.assertEqual(result["selectedPackages"], sorted(self.candidates))
-        self.assertEqual(result["satisfiedItems"], ["desktop-gnome"])
+        with self.assertRaisesRegex(ValueError, "not eligible: desktop-gnome"):
+            self.validate(selection)
 
     def test_online_reviewed_choice_is_pending_not_installed(self):
         selection = self.selection(
@@ -173,9 +172,7 @@ class PacstrapSelectionTests(unittest.TestCase):
             )
 
     def test_receipt_separates_baseline_selected_and_full_provenance(self):
-        selection = self.selection(
-            {"desktop-gnome": "desktop-environments/desktop-gnome"}
-        )
+        selection = self.selection()
         result = self.validate(selection)
         with tempfile.TemporaryDirectory() as directory:
             linxirapacstrap._write_receipt(
@@ -187,7 +184,7 @@ class PacstrapSelectionTests(unittest.TestCase):
                 )
             )
         self.assertEqual(receipt["installedBaselinePackages"], self.baseline)
-        self.assertEqual(receipt["installedSelectedPackages"], sorted(self.candidates))
+        self.assertEqual(receipt["installedSelectedPackages"], [])
         self.assertEqual(
             receipt["selectionDocument"]["schemaVersion"],
             "org.linxira.component-selection.v1",
@@ -195,8 +192,8 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(
             receipt["selectionDocument"]["leaves"],
             [{
-                "id": "desktop-gnome",
-                "requestedBy": ["desktop-environments/desktop-gnome"],
+                "id": "desktop-plasma",
+                "requestedBy": ["desktop-environments/desktop-plasma"],
                 "provenance": ["optional", "user"],
             }],
         )
