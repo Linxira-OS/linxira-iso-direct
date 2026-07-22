@@ -216,6 +216,7 @@ validate_package_artifact "$catalog_package" linxira-catalog \
 validate_package_artifact "$components_package" linxira-components \
   usr/bin/linxira-components \
   usr/bin/linxira-components-service \
+  usr/bin/linxira-components-worker \
   usr/lib/linxira-components/linxira_components/__main__.py \
   usr/lib/linxira-components/linxira_components/schemas/receipt-v1.schema.json \
   usr/lib/linxira-components/linxira_components/schemas/catalog-v3.schema.json \
@@ -224,11 +225,12 @@ validate_package_artifact "$components_package" linxira-components \
   usr/lib/linxira-components/linxira_components/schemas/confirmation-v2.schema.json \
   usr/lib/linxira-components/linxira_components/schemas/receipt-v2.schema.json \
   usr/lib/systemd/system/linxira-components.service \
+  usr/lib/systemd/system/linxira-components-worker@.service \
   usr/share/dbus-1/system.d/org.linxira.Components1.conf \
   usr/share/dbus-1/system-services/org.linxira.Components1.service \
   usr/share/polkit-1/actions/org.linxira.components.policy \
   usr/share/licenses/linxira-components/LICENSE
-validate_package_version "$components_package" 0.5.0-1
+validate_package_version "$components_package" 0.6.0-1
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
@@ -259,7 +261,7 @@ validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-dr
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
   usr/share/metainfo/org.linxira.HardwareDriverManager.metainfo.xml \
   usr/share/licenses/linxira-hardware-driver-manager/LICENSE
-validate_package_version "$hardware_driver_manager_package" 0.2.0-1
+validate_package_version "$hardware_driver_manager_package" 0.3.0-1
 validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagnostics \
   usr/bin/linxira-recovery-diagnostics \
   usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \

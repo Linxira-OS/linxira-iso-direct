@@ -155,8 +155,8 @@ def run():
             failures.append("missing package: " + package)
     required_versions = {
         "linxira-chwd-detector": "0.1.0-1",
-        "linxira-components": "0.5.0-1",
-        "linxira-hardware-driver-manager": "0.2.0-1",
+        "linxira-components": "0.6.0-1",
+        "linxira-hardware-driver-manager": "0.3.0-1",
     }
     for package, version in required_versions.items():
         installed = _package_version(root, package)
@@ -191,7 +191,9 @@ def run():
         "/usr/share/applications/org.linxira.HardwareDriverManager.desktop",
         "/usr/share/applications/org.linxira.RecoveryDiagnostics.desktop",
         "/usr/bin/linxira-components-service",
+        "/usr/bin/linxira-components-worker",
         "/usr/lib/systemd/system/linxira-components.service",
+        "/usr/lib/systemd/system/linxira-components-worker@.service",
         "/usr/share/dbus-1/system.d/org.linxira.Components1.conf",
         "/usr/share/polkit-1/actions/org.linxira.components.policy",
         "/usr/share/applications/org.linxira.Welcome.desktop",
