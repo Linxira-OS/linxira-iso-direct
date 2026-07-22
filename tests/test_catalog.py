@@ -11,6 +11,7 @@ SETTINGS_PATH = PROFILE_ROOT / "airootfs/etc/calamares/settings.conf"
 MODULES_PATH = PROFILE_ROOT / "airootfs/etc/calamares/modules"
 LOCAL_MODULES_PATH = PROFILE_ROOT / "airootfs/usr/lib/calamares/modules"
 TARGET_PACKAGES = PROFILE_ROOT / "target-packages.x86_64"
+CANDIDATE_PACKAGES = PROFILE_ROOT / "offline-candidate-packages.x86_64"
 
 
 class CatalogTests(unittest.TestCase):
@@ -58,6 +59,26 @@ class CatalogTests(unittest.TestCase):
                 "linxira-component-manager",
             }.issubset(packages)
         )
+
+    def test_offline_candidates_are_separate_and_exactly_gnome(self):
+        baseline = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        candidates = CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
+        gnome = next(item for item in self.catalog["desktops"] if item["id"] == "desktop-gnome")
+        self.assertEqual(candidates, gnome["artifact"]["ids"])
+        self.assertTrue(set(candidates).isdisjoint(baseline))
+
+        build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
+        self.assertIn('target_packages+=("${candidate_packages[@]}")', build)
+        pacstrap = (LOCAL_MODULES_PATH / "linxirapacstrap/main.py").read_text(encoding="utf-8")
+        self.assertIn('command.extend(selected_packages)', pacstrap)
+        self.assertNotIn('selection["directPackageTargets"]', pacstrap)
+
+    def test_shared_desktop_plumbing_is_in_live_and_target(self):
+        live = set((PROFILE_ROOT / "packages.x86_64").read_text(encoding="utf-8").splitlines())
+        target = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        shared = {"wireplumber", "xdg-desktop-portal", "xdg-desktop-portal-kde"}
+        self.assertTrue(shared.issubset(live))
+        self.assertTrue(shared.issubset(target))
 
     def test_firefox_default_is_part_of_the_fixed_offline_baseline(self):
         packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())

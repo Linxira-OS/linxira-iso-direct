@@ -27,10 +27,13 @@ unshare --map-auto --map-root-user env \
     cp -a "$PROFILE_DIR/airootfs/etc/calamares/." "$ROOT/etc/calamares/"
     cp -a "$PROFILE_DIR/airootfs/usr/lib/calamares/modules/linxirapacstrap" \
       "$PROFILE_DIR/airootfs/usr/lib/calamares/modules/linxirabranding" \
+      "$PROFILE_DIR/airootfs/usr/lib/calamares/modules/linxirasession" \
       "$PROFILE_DIR/airootfs/usr/lib/calamares/modules/linxiravalidate" \
       "$ROOT/usr/lib/calamares/modules/"
     install -Dm644 "$PROFILE_DIR/target-packages.x86_64" \
       "$ROOT/etc/calamares/target-packages.x86_64"
+    install -Dm644 "$PROFILE_DIR/offline-candidate-packages.x86_64" \
+      "$ROOT/etc/calamares/offline-candidate-packages.x86_64"
     bsdtar -xOf "$ARTWORK_PACKAGE" usr/share/linxira/linxira-logo.svg \
       >"$ROOT/etc/calamares/branding/linxira/linxira-logo.svg"
   '

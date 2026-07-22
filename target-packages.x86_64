@@ -30,6 +30,7 @@ linux-lts-headers
 linxira-artwork
 linxira-catalog
 linxira-component-manager
+linxira-completion-agent
 linxira-components
 linxira-config-hub
 linxira-package-center
@@ -55,3 +56,6 @@ spectacle
 sudo
 systemsettings
 timeshift
+wireplumber
+xdg-desktop-portal
+xdg-desktop-portal-kde

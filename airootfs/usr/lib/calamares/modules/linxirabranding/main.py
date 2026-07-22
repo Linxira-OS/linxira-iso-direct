@@ -80,6 +80,13 @@ def _fix_console_keymap(root):
         vconsole_path.write_text(contents, encoding="utf-8")
 
 
+def _plasma_selected():
+    selection = libcalamares.globalstorage.value("linxiraSoftwareSelection")
+    return isinstance(selection, dict) and "desktop-plasma" in selection.get(
+        "selectedLeafIds", []
+    )
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     if not root or not os.path.ismount(root):
@@ -88,12 +95,14 @@ def run():
     try:
         _copy_file("/etc/os-release", root)
         _copy_file("/etc/fastfetch/config.d/linxira.jsonc", root)
+        _copy_file("/etc/xdg/autostart/org.linxira.Welcome.desktop", root)
         _copy_file("/etc/skel/.bashrc", root)
-        _copy_file("/etc/skel/.config/kdeglobals", root)
-        _install_target_plasma_layout(
-            "/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc",
-            root,
-        )
+        if _plasma_selected():
+            _copy_file("/etc/skel/.config/kdeglobals", root)
+            _install_target_plasma_layout(
+                "/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc",
+                root,
+            )
 
         theme_source = Path("/usr/share/plymouth/themes/linxira")
         theme_target = Path(root) / "usr/share/plymouth/themes/linxira"

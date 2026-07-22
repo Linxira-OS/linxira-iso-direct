@@ -4,6 +4,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = (
@@ -95,6 +96,21 @@ class BrandingConfigurationTests(unittest.TestCase):
     def test_run_copies_dark_kde_defaults_to_target(self):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn('_copy_file("/etc/skel/.config/kdeglobals", root)', source)
+
+    def test_plasma_defaults_are_selection_aware(self):
+        storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-plasma"]})
+        with mock.patch.object(linxirabranding.libcalamares, "globalstorage", storage, create=True):
+            self.assertTrue(linxirabranding._plasma_selected())
+        storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-gnome"]})
+        with mock.patch.object(linxirabranding.libcalamares, "globalstorage", storage, create=True):
+            self.assertFalse(linxirabranding._plasma_selected())
+
+    def test_branding_installs_desktop_neutral_welcome_autostart(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            '_copy_file("/etc/xdg/autostart/org.linxira.Welcome.desktop", root)',
+            source,
+        )
 
 
 if __name__ == "__main__":

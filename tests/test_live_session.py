@@ -10,9 +10,7 @@ INSTALLER_SHELL = PROFILE_ROOT / "airootfs/usr/local/bin/linxira-installer-shell
 SDDM_CONFIG = PROFILE_ROOT / "airootfs/etc/sddm.conf.d/10-linxira-live.conf"
 WELCOME_SOURCE = PROFILE_ROOT.parent / "linxira-welcome"
 WELCOME = WELCOME_SOURCE / "src/linxira-welcome"
-WELCOME_AUTOSTART = (
-    WELCOME_SOURCE / "data/autostart/org.linxira.Welcome.desktop"
-)
+WELCOME_AUTOSTART = PROFILE_ROOT / "airootfs/etc/xdg/autostart/org.linxira.Welcome.desktop"
 WELCOME_I18N = WELCOME_SOURCE / "data/i18n"
 CANONICAL_LOGO = PROFILE_ROOT.parent / "linxira-artwork/assets/logo/linxira-l.svg"
 SCALE_LOGO = (
@@ -54,6 +52,14 @@ class LiveSessionTests(unittest.TestCase):
         mimeapps = (PROFILE_ROOT / "airootfs/etc/xdg/mimeapps.list").read_text(encoding="utf-8")
         self.assertNotIn("haruna", mimeapps.lower())
 
+    def test_global_mime_policy_only_sets_firefox_web_handlers(self):
+        mimeapps = (PROFILE_ROOT / "airootfs/etc/xdg/mimeapps.list").read_text(encoding="utf-8")
+        for desktop in ("org.kde", "dolphin", "kate", "okular", "gwenview", "ark"):
+            self.assertNotIn(desktop, mimeapps.lower())
+        self.assertIn("x-scheme-handler/http=firefox.desktop", mimeapps)
+        self.assertIn("x-scheme-handler/https=firefox.desktop", mimeapps)
+        self.assertIn("text/html=firefox.desktop", mimeapps)
+
     def test_grub_loads_png_support_before_the_background(self):
         config = BOOT_CONFIGS[0].read_text(encoding="utf-8")
         self.assertLess(config.index("insmod png"), config.index("background_image"))
@@ -69,6 +75,7 @@ class LiveSessionTests(unittest.TestCase):
         desktop = WELCOME_AUTOSTART.read_text(encoding="utf-8")
         self.assertIn("Exec=/usr/bin/linxira-welcome --autostart", desktop)
         self.assertNotIn("calamares", desktop.lower())
+        self.assertNotIn("OnlyShowIn=KDE", desktop)
 
     def test_welcome_has_fixed_launchers_and_no_privileged_shell(self):
         script = WELCOME.read_text(encoding="utf-8")
@@ -144,6 +151,22 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("Relogin=false", config)
         self.assertNotIn("Relogin=true", config)
 
+    def test_sddm_is_the_only_display_manager_owner(self):
+        links = (PROFILE_ROOT / "profile-symlinks.list").read_text(encoding="utf-8")
+        self.assertIn(
+            "airootfs/etc/systemd/system/display-manager.service|/usr/lib/systemd/system/sddm.service",
+            links,
+        )
+        self.assertNotIn("gdm.service", links)
+        displaymanager = (PROFILE_ROOT / "airootfs/etc/calamares/modules/displaymanager.conf").read_text(encoding="utf-8")
+        self.assertIn("displaymanagers: [ sddm ]", displaymanager)
+        self.assertNotIn("gdm", displaymanager)
+
+    def test_gnome_wallpaper_defaults_have_an_explicit_tested_deferral(self):
+        readme = (PROFILE_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("GNOME wallpaper gsettings are intentionally deferred", readme)
+        self.assertFalse(any((PROFILE_ROOT / "airootfs").rglob("*gsettings*")))
+
     def test_installer_failure_is_visible_and_logged(self):
         script = INSTALLER_SHELL.read_text(encoding="utf-8")
         self.assertIn("/tmp/linxira-installer.log", script)
@@ -161,6 +184,7 @@ class LiveSessionTests(unittest.TestCase):
         self.assertNotIn("       - partition", settings)
         self.assertNotIn("packagechooser@", settings)
         self.assertIn("linxirasoftware", settings)
+        self.assertIn("      - displaymanager\n      - linxirasession\n", settings)
 
     def test_initramfs_jobs_are_ordered_and_consolefont_is_removed(self):
         settings = (PROFILE_ROOT / "airootfs/etc/calamares/settings.conf").read_text(encoding="utf-8")

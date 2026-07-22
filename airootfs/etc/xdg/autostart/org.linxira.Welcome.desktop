@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Linxira Welcome
+Name[zh_CN]=Linxira Welcome
+Exec=/usr/bin/linxira-welcome --autostart
+Icon=linxira
+Terminal=false

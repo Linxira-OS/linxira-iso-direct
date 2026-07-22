@@ -22,6 +22,7 @@ Build with a verified local package artifact:
   --catalog-package /path/to/linxira-catalog-3.0.0-1-any.pkg.tar.zst \
   --components-package /path/to/linxira-components-0.2.0-1-any.pkg.tar.zst \
   --component-manager-package /path/to/linxira-component-manager-0.1.0-1-any.pkg.tar.zst \
+  --completion-agent-package /path/to/linxira-completion-agent-0.1.0-2-any.pkg.tar.zst \
   --config-hub-package /path/to/linxira-config-hub-2.2.0-1-any.pkg.tar.zst \
   --package-center-package /path/to/linxira-package-center-0.2.0-1-any.pkg.tar.zst \
   --welcome-package /path/to/linxira-welcome-1.0.0-2-any.pkg.tar.zst \
@@ -53,12 +54,21 @@ with the documented subvolumes, GRUB, `linux` plus `linux-lts`, Plasma, and
 Shelly. It validates required packages, kernels, GRUB configuration, Btrfs
 mounts, and absence of live-installer content before reporting success.
 
-The installer intentionally uses the fixed, offline Plasma baseline. Legacy
+The installer uses a fixed offline Plasma baseline and a separate reviewed
+offline candidate manifest. The repository contains their dependency union,
+but pacstrap adds only eligible included artifacts selected through Catalog v3.
+Legacy
 flat desktop, component, and application chooser pages were removed because
 they used Catalog v2 and could start an unfrozen online package transaction.
-After first boot, Package Center and Component Manager are the canonical
-Catalog v3 selection surfaces. An inline installer tree requires a native
-Calamares Qt viewmodule and is tracked separately.
+The installer selection is supplied by the packaged native Calamares Catalog
+v3 viewmodule. After first boot, Package Center and Component Manager remain the
+canonical application and component selection surfaces.
+
+GNOME wallpaper gsettings are intentionally deferred in this profile: canonical
+wallpaper files are supplied by the packaged artwork rather than an ISO overlay,
+so this repository cannot validate their installed path without building the
+package or ISO. Plasma's existing package-owned wallpaper configuration remains
+unchanged.
 
 This slice still requires disposable-VM installation and boot acceptance. BIOS,
 encryption, the responsive kernel profile, signed offline metadata, and initial

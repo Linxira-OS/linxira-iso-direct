@@ -164,11 +164,14 @@ wireless-regdb
 wireless_tools
 wpa_supplicant
 wvdial
+wireplumber
 konsole
 noto-fonts
 noto-fonts-cjk
 xorg-server
 xdg-utils
+xdg-desktop-portal
+xdg-desktop-portal-kde
 xfsprogs
 xl2tpd
 zsh

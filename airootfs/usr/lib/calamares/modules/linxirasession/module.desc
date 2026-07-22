@@ -1,0 +1,7 @@
+---
+type: job
+name: linxirasession
+interface: python
+script: main.py
+weight: 1
+noconfig: true

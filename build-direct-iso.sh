@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --config-hub-package PATH --package-center-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -12,6 +12,7 @@ artwork_package=''
 catalog_package=''
 components_package=''
 component_manager_package=''
+completion_agent_package=''
 config_hub_package=''
 package_center_package=''
 welcome_package=''
@@ -48,6 +49,11 @@ while [[ $# -gt 0 ]]; do
     --component-manager-package)
       [[ $# -ge 2 ]] || usage
       component_manager_package=$2
+      shift 2
+      ;;
+    --completion-agent-package)
+      [[ $# -ge 2 ]] || usage
+      completion_agent_package=$2
       shift 2
       ;;
     --config-hub-package)
@@ -92,6 +98,7 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$catalog_package" || ! -f "$catalog_package" ||
       -z "$components_package" || ! -f "$components_package" ||
       -z "$component_manager_package" || ! -f "$component_manager_package" ||
+      -z "$completion_agent_package" || ! -f "$completion_agent_package" ||
       -z "$config_hub_package" || ! -f "$config_hub_package" ||
       -z "$package_center_package" || ! -f "$package_center_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
@@ -140,6 +147,7 @@ artwork_package=$(realpath "$artwork_package")
 catalog_package=$(realpath "$catalog_package")
 components_package=$(realpath "$components_package")
 component_manager_package=$(realpath "$component_manager_package")
+completion_agent_package=$(realpath "$completion_agent_package")
 config_hub_package=$(realpath "$config_hub_package")
 package_center_package=$(realpath "$package_center_package")
 welcome_package=$(realpath "$welcome_package")
@@ -170,6 +178,10 @@ validate_package_artifact "$component_manager_package" linxira-component-manager
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
   usr/share/licenses/linxira-component-manager/LICENSE
+validate_package_artifact "$completion_agent_package" linxira-completion-agent \
+  usr/bin/linxira-completion-agent \
+  etc/xdg/autostart/org.linxira.Completion.desktop \
+  usr/share/licenses/linxira-completion-agent/LICENSE
 validate_package_artifact "$config_hub_package" linxira-config-hub \
   usr/bin/linxira-config \
   usr/share/licenses/linxira-config-hub/LICENSE
@@ -238,6 +250,7 @@ package_artifacts=(
   "$catalog_package"
   "$components_package"
   "$component_manager_package"
+  "$completion_agent_package"
   "$config_hub_package"
   "$package_center_package"
   "$welcome_package"
@@ -257,8 +270,11 @@ if grep -q '@LINXIRA_LOCAL_REPO@' "${profile_copy}/pacman.conf"; then
 fi
 
 target_manifest="${profile_copy}/target-packages.x86_64"
+candidate_manifest="${profile_copy}/offline-candidate-packages.x86_64"
 install -Dm644 "$target_manifest" \
   "${profile_copy}/airootfs/etc/calamares/target-packages.x86_64"
+install -Dm644 "$candidate_manifest" \
+  "${profile_copy}/airootfs/etc/calamares/offline-candidate-packages.x86_64"
 branding_dir="${profile_copy}/airootfs/etc/calamares/branding/linxira"
 bsdtar -xOf "$artwork_package" usr/share/linxira/linxira-logo.svg \
   >"${branding_dir}/linxira-logo.svg"
@@ -269,6 +285,8 @@ cp -a "${plymouth_theme_directory}/." "$theme_target/"
 sed -i 's/\r$//' "$theme_target/linxira.plymouth"
 
 mapfile -t target_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$target_manifest")
+mapfile -t candidate_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$candidate_manifest")
+target_packages+=("${candidate_packages[@]}")
 target_packages+=(amd-ucode intel-ucode)
 offline_repo="${profile_copy}/airootfs/opt/linxira/offline-repo/x86_64"
 package_cache=$(mktemp -d "${build_parent}/.linxira-target-package-cache.XXXXXX")
