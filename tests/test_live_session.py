@@ -24,6 +24,7 @@ BOOT_CONFIGS = (
 )
 LIVE_PACKAGES = PROFILE_ROOT / "packages.x86_64"
 TARGET_PACKAGES = PROFILE_ROOT / "target-packages.x86_64"
+PACMAN_CONFIG = PROFILE_ROOT / "pacman.conf"
 
 
 class LiveSessionTests(unittest.TestCase):
@@ -47,10 +48,18 @@ class LiveSessionTests(unittest.TestCase):
         live_packages = set(LIVE_PACKAGES.read_text(encoding="utf-8").splitlines())
         target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
         self.assertTrue({"openconnect", "stoken", "haruna"}.isdisjoint(live_packages))
+        self.assertTrue({"pptpclient", "vpnc"}.isdisjoint(live_packages))
+        self.assertTrue({"networkmanager-openvpn", "wireguard-tools"}.issubset(live_packages))
+        self.assertTrue({"networkmanager-openvpn", "wireguard-tools"}.issubset(target_packages))
         self.assertIn("gwenview", target_packages)
         self.assertTrue({"haruna", "vlc"}.isdisjoint(target_packages))
         mimeapps = (PROFILE_ROOT / "airootfs/etc/xdg/mimeapps.list").read_text(encoding="utf-8")
         self.assertNotIn("haruna", mimeapps.lower())
+
+    def test_multilib_is_enabled_for_the_reviewed_gaming_workflow(self):
+        config = PACMAN_CONFIG.read_text(encoding="utf-8")
+        self.assertIn("\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n", config)
+        self.assertNotIn("\n#[multilib]\n", config)
 
     def test_global_mime_policy_only_sets_firefox_web_handlers(self):
         mimeapps = (PROFILE_ROOT / "airootfs/etc/xdg/mimeapps.list").read_text(encoding="utf-8")
@@ -208,13 +217,16 @@ class LiveSessionTests(unittest.TestCase):
         artifact_contracts = {
             "catalog_package": "linxira-catalog",
             "component_manager_package": "linxira-component-manager",
+            "completion_agent_package": "linxira-completion-agent",
             "components_package": "linxira-components",
             "config_hub_package": "linxira-config-hub",
+            "gaming_manager_package": "linxira-gaming-manager",
             "package_center_package": "linxira-package-center",
+            "update_package": "linxira-update",
             "welcome_package": "linxira-welcome",
         }
         system_packages = set(artifact_contracts.values())
-        self.assertTrue(system_packages.issubset(live_packages))
+        self.assertTrue((system_packages - {"linxira-completion-agent"}).issubset(live_packages))
         self.assertTrue(system_packages.issubset(target_packages))
         build = BUILD_SCRIPT.read_text(encoding="utf-8")
         self.assertNotIn('profile_dir}/../linxira-', build)

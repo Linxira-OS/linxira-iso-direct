@@ -76,7 +76,9 @@ linxira-catalog
 linxira-component-manager
 linxira-components
 linxira-config-hub
+linxira-gaming-manager
 linxira-package-center
+linxira-update
 linxira-welcome
 mesa
 livecd-sounds
@@ -109,7 +111,7 @@ open-vm-tools
 okular
 openpgp-card-tools
 openssh
-openvpn
+networkmanager-openvpn
 partclone
 parted
 partimage
@@ -118,7 +120,6 @@ pcsclite
 pipewire-audio
 pipewire-pulse
 ppp
-pptpclient
 plasma-desktop
 plasma-nm
 plasma-pa
@@ -159,7 +160,7 @@ usbutils
 vim
 virtualbox-guest-utils-nox
 vulkan-swrast
-vpnc
+wireguard-tools
 wireless-regdb
 wireless_tools
 wpa_supplicant

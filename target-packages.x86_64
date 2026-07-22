@@ -33,9 +33,12 @@ linxira-component-manager
 linxira-completion-agent
 linxira-components
 linxira-config-hub
+linxira-gaming-manager
 linxira-package-center
+linxira-update
 linxira-welcome
 networkmanager
+networkmanager-openvpn
 noto-fonts
 noto-fonts-cjk
 okular
@@ -57,5 +60,6 @@ sudo
 systemsettings
 timeshift
 wireplumber
+wireguard-tools
 xdg-desktop-portal
 xdg-desktop-portal-kde

@@ -411,6 +411,19 @@ def _write_receipt(root, result, baseline_packages, selected_packages):
     temporary.replace(receipt_path)
 
 
+def _enable_target_multilib(root):
+    config_path = Path(root) / "etc/pacman.conf"
+    contents = config_path.read_text(encoding="utf-8")
+    disabled = "#[multilib]\n#Include = /etc/pacman.d/mirrorlist"
+    enabled = "[multilib]\nInclude = /etc/pacman.d/mirrorlist"
+    if disabled in contents:
+        if contents.count(disabled) != 1:
+            raise ValueError("target pacman configuration has ambiguous multilib sections")
+        config_path.write_text(contents.replace(disabled, enabled), encoding="utf-8")
+    elif enabled not in contents:
+        raise ValueError("target pacman configuration has no recognized multilib section")
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -448,9 +461,10 @@ def run():
         return "Package installation failed", "pacstrap did not complete successfully."
 
     try:
+        _enable_target_multilib(root)
         _write_receipt(root, result, baseline_packages, selected_packages)
-    except OSError as error:
-        return "Installer receipt could not be written", str(error)
+    except (OSError, ValueError) as error:
+        return "Target configuration could not be finalized", str(error)
 
     libcalamares.job.setprogress(1.0)
     return None

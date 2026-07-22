@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --update-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -15,6 +15,8 @@ component_manager_package=''
 completion_agent_package=''
 config_hub_package=''
 package_center_package=''
+gaming_manager_package=''
+update_package=''
 welcome_package=''
 plymouth_theme_directory=''
 output_dir="${profile_dir}/out"
@@ -66,6 +68,16 @@ while [[ $# -gt 0 ]]; do
       package_center_package=$2
       shift 2
       ;;
+    --gaming-manager-package)
+      [[ $# -ge 2 ]] || usage
+      gaming_manager_package=$2
+      shift 2
+      ;;
+    --update-package)
+      [[ $# -ge 2 ]] || usage
+      update_package=$2
+      shift 2
+      ;;
     --welcome-package)
       [[ $# -ge 2 ]] || usage
       welcome_package=$2
@@ -101,6 +113,8 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$completion_agent_package" || ! -f "$completion_agent_package" ||
       -z "$config_hub_package" || ! -f "$config_hub_package" ||
       -z "$package_center_package" || ! -f "$package_center_package" ||
+      -z "$gaming_manager_package" || ! -f "$gaming_manager_package" ||
+      -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
       -z "$plymouth_theme_directory" ||
       ! -f "$plymouth_theme_directory/linxira.plymouth" ||
@@ -150,6 +164,8 @@ component_manager_package=$(realpath "$component_manager_package")
 completion_agent_package=$(realpath "$completion_agent_package")
 config_hub_package=$(realpath "$config_hub_package")
 package_center_package=$(realpath "$package_center_package")
+gaming_manager_package=$(realpath "$gaming_manager_package")
+update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
 plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
 validate_package_artifact "$shelly_package" shelly
@@ -190,6 +206,15 @@ validate_package_artifact "$package_center_package" linxira-package-center \
   usr/share/applications/org.linxira.PackageCenter.desktop \
   usr/share/linxira/package-center/VERSION \
   usr/share/licenses/linxira-package-center/LICENSE
+validate_package_artifact "$gaming_manager_package" linxira-gaming-manager \
+  usr/bin/linxira-gaming-manager \
+  usr/share/applications/org.linxira.GamingManager.desktop \
+  usr/share/licenses/linxira-gaming-manager/LICENSE
+validate_package_artifact "$update_package" linxira-update \
+  usr/bin/linxira-update \
+  etc/xdg/autostart/linxira-update-tray.desktop \
+  usr/lib/systemd/user/linxira-update.timer \
+  usr/share/licenses/linxira-update/LICENSE
 validate_package_artifact "$welcome_package" linxira-welcome \
   usr/bin/linxira-welcome \
   usr/share/applications/org.linxira.Welcome.desktop \
@@ -253,6 +278,8 @@ package_artifacts=(
   "$completion_agent_package"
   "$config_hub_package"
   "$package_center_package"
+  "$gaming_manager_package"
+  "$update_package"
   "$welcome_package"
 )
 repo_artifacts=()

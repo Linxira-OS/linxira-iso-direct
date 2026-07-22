@@ -41,8 +41,12 @@ class InstalledSystemValidationTests(unittest.TestCase):
         for value in (
             '"linxira-component-manager"',
             '"linxira-completion-agent"',
+            '"linxira-gaming-manager"',
+            '"linxira-update"',
             '"/usr/bin/linxira-component-manager"',
             '"/usr/bin/linxira-completion-agent"',
+            '"/usr/bin/linxira-gaming-manager"',
+            '"/usr/bin/linxira-update"',
             '"/etc/xdg/autostart/org.linxira.Completion.desktop"',
             '"/usr/share/applications/org.linxira.ComponentManager.desktop"',
             '"/usr/share/linxira/catalog/catalog-v3.json"',

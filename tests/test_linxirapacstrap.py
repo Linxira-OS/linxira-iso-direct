@@ -201,6 +201,21 @@ class PacstrapSelectionTests(unittest.TestCase):
             }],
         )
 
+    def test_target_multilib_is_enabled_idempotently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "etc/pacman.conf"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                "[core]\nInclude = /etc/pacman.d/mirrorlist\n"
+                "#[multilib]\n#Include = /etc/pacman.d/mirrorlist\n",
+                encoding="utf-8",
+            )
+            linxirapacstrap._enable_target_multilib(directory)
+            linxirapacstrap._enable_target_multilib(directory)
+            contents = config.read_text(encoding="utf-8")
+        self.assertIn("[multilib]\nInclude = /etc/pacman.d/mirrorlist", contents)
+        self.assertNotIn("#[multilib]", contents)
+
 
 if __name__ == "__main__":
     unittest.main()
