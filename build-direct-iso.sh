@@ -375,11 +375,13 @@ mapfile -t target_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$target_manifest
 mapfile -t candidate_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$candidate_manifest")
 target_packages+=("${candidate_packages[@]}")
 target_packages+=(amd-ucode intel-ucode)
+# Resolve Arch virtual providers without making the ISO build interactive.
+target_packages+=(pipewire-jack qt6-multimedia-ffmpeg mkinitcpio tesseract-data-eng)
 offline_repo="${profile_copy}/airootfs/opt/linxira/offline-repo/x86_64"
 package_cache=$(mktemp -d "${build_parent}/.linxira-target-package-cache.XXXXXX")
 pacman_db=$(mktemp -d "${build_parent}/.linxira-pacman-db.XXXXXX")
 mkdir -p "$offline_repo" "${pacman_db}/local"
-unshare --map-auto --map-root-user pacman --disable-sandbox \
+printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox \
   --config "${profile_copy}/pacman.conf" \
   --dbpath "$pacman_db" \
   --cachedir "$package_cache" \
