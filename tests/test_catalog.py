@@ -91,14 +91,17 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(shared.issubset(live))
         self.assertTrue(shared.issubset(target))
 
-    def test_default_browser_policy_keeps_firefox_offline_and_chromium_pending(self):
+    def test_default_browser_policy_keeps_only_firefox_offline(self):
         packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
         selected = [
             item["id"]
             for item in self.catalog["applications"]
             if item["presentation"]["defaultSelected"]
         ]
-        self.assertEqual(selected, ["firefox", "chromium"])
+        chromium = next(item for item in self.catalog["applications"] if item["id"] == "chromium")
+        self.assertEqual(selected, ["firefox"])
+        self.assertTrue(chromium["presentation"]["recommended"])
+        self.assertFalse(chromium["presentation"]["defaultSelected"])
         self.assertIn("firefox", packages)
         self.assertNotIn("chromium", packages)
 

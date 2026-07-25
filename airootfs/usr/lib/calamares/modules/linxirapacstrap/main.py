@@ -169,11 +169,20 @@ def _paths_to_leaf(node_id, target, bundles, roles, leaves, visiting=None):
     return paths
 
 
-def _derive_selection(catalog, selected_ids, submitted_bundle_ids, digest, leaves):
+def _derive_selection(
+    catalog,
+    selected_ids,
+    submitted_bundle_ids,
+    digest,
+    leaves,
+    *,
+    user_selected_ids=None,
+):
     bundles, categories, roles = _bundle_graph(catalog)
     roots = sorted(set(categories) & set(bundles))
     leaf_entries = []
     derived_bundles = set()
+    user_selected = set(selected_ids) if user_selected_ids is None else set(user_selected_ids)
     for leaf_id in selected_ids:
         paths = sorted({
             "/".join(path)
@@ -182,7 +191,9 @@ def _derive_selection(catalog, selected_ids, submitted_bundle_ids, digest, leave
         })
         if not paths:
             raise ValueError("selected Catalog leaf has no category-root provenance: " + leaf_id)
-        provenance = {"user"}
+        provenance = set()
+        if leaf_id in user_selected:
+            provenance.add("user")
         for path in paths:
             parts = path.split("/")
             derived_bundles.update(parts[:-1])
@@ -192,7 +203,7 @@ def _derive_selection(catalog, selected_ids, submitted_bundle_ids, digest, leave
             "requestedBy": paths,
             "provenance": sorted(provenance),
         })
-    if submitted_bundle_ids != sorted(derived_bundles):
+    if submitted_bundle_ids is not None and submitted_bundle_ids != sorted(derived_bundles):
         raise ValueError("selectedBundleIds do not match Catalog-derived selection provenance")
     selected = set(selected_ids)
     return {
@@ -202,7 +213,11 @@ def _derive_selection(catalog, selected_ids, submitted_bundle_ids, digest, leave
         "selectedLeafIds": selected_ids,
         "selectedBundleIds": sorted(derived_bundles),
         "leaves": leaf_entries,
-        "userOverrides": [{"id": leaf_id, "selected": True} for leaf_id in selected_ids],
+        "userOverrides": [
+            {"id": leaf_id, "selected": True}
+            for leaf_id in selected_ids
+            if leaf_id in user_selected
+        ],
         "constraintResults": _expected_constraints(
             catalog, selected, bundles, categories, roles, leaves
         ),
@@ -291,6 +306,93 @@ def _validate_constraint_types(value):
             raise ValueError(f"constraintResults[{index}] has invalid field types")
 
 
+def _installer_eligible(leaf):
+    availability = leaf.get("availability", {})
+    artifact = leaf.get("artifact", {})
+    license_info = leaf.get("license", {})
+    return (
+        leaf.get("provider") == "pacman"
+        and leaf.get("source") == "arch"
+        and availability.get("status") == "available"
+        and availability.get("channel") == "default"
+        and "x86_64" in availability.get("architectures", [])
+        and leaf.get("review", {}).get("status") == "reviewed"
+        and artifact.get("type") in {"package", "package-group"}
+        and license_info.get("requiresAcceptance") is not True
+    )
+
+
+def _required_bundle_leaf_ids(bundle_id, leaves, bundles, roles, visiting=None):
+    visiting = set() if visiting is None else visiting
+    if bundle_id in visiting:
+        raise ValueError("Catalog bundle cycle detected at " + bundle_id)
+    visiting.add(bundle_id)
+    required = set()
+    for child_id, role in roles.get(bundle_id, {}).items():
+        if role != "required":
+            continue
+        if child_id in leaves:
+            required.add(child_id)
+        elif child_id in bundles:
+            required.update(
+                _required_bundle_leaf_ids(child_id, leaves, bundles, roles, visiting)
+            )
+    visiting.remove(bundle_id)
+    return required
+
+
+def _direct_required_leaf_ids(leaf_id, leaves, bundles, roles, nodes):
+    required = set()
+    for dependency_id in leaves[leaf_id].get("requires", []):
+        if dependency_id in leaves:
+            required.add(dependency_id)
+        elif dependency_id in bundles:
+            required.update(
+                _required_bundle_leaf_ids(dependency_id, leaves, bundles, roles)
+            )
+        elif dependency_id not in nodes:
+            raise ValueError(
+                "Catalog leaf references an unknown required dependency: "
+                + leaf_id
+                + " -> "
+                + dependency_id
+            )
+    return required
+
+
+def _expand_required_leaf_ids(selected_ids, leaves, bundles, roles, nodes):
+    ordered = []
+    expanded = set()
+    visiting = []
+
+    def visit(leaf_id):
+        if leaf_id in expanded:
+            return
+        if leaf_id in visiting:
+            cycle = " -> ".join([*visiting[visiting.index(leaf_id):], leaf_id])
+            raise ValueError("Catalog requires cycle detected: " + cycle)
+        visiting.append(leaf_id)
+        for dependency_id in sorted(
+            _direct_required_leaf_ids(leaf_id, leaves, bundles, roles, nodes)
+        ):
+            visit(dependency_id)
+        visiting.pop()
+        expanded.add(leaf_id)
+        ordered.append(leaf_id)
+
+    for leaf_id in selected_ids:
+        visit(leaf_id)
+    return sorted(expanded), ordered
+
+
+def _validate_selection_document(selection, leaves, bundles, roles):
+    _validate_provenance(selection, leaves, bundles, roles)
+    _validate_overrides(selection, leaves)
+    _validate_constraint_types(selection["constraintResults"])
+    if not all(result["valid"] for result in selection["constraintResults"]):
+        raise ValueError("selection violates a Catalog category constraint")
+
+
 def _catalog_selection(config, baseline_packages, candidate_packages):
     submitted = libcalamares.globalstorage.value(
         config.get("selectionKey", "linxiraSoftwareSelection")
@@ -326,6 +428,11 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
         for section in ("desktops", "applications", "components")
         for item in catalog.get(section, [])
     }
+    nodes = {
+        item["id"]: item
+        for section in ("desktops", "applications", "components", "bundles", "operations")
+        for item in catalog.get(section, [])
+    }
     selected_ids = _string_array(submitted["selectedLeafIds"], "selectedLeafIds", nonempty=True)
     selected_bundles = _string_array(submitted["selectedBundleIds"], "selectedBundleIds", nonempty=True)
     bundles, categories, roles = _bundle_graph(catalog)
@@ -336,35 +443,49 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
     if unknown_bundles:
         raise ValueError("unknown selected Catalog bundles: " + ", ".join(unknown_bundles))
 
-    selection = _derive_selection(catalog, selected_ids, selected_bundles, digest, leaves)
-    _validate_provenance(selection, leaves, bundles, roles)
-    _validate_overrides(selection, leaves)
-    _validate_constraint_types(selection["constraintResults"])
-    expected_constraints = selection["constraintResults"]
-    if not all(result["valid"] for result in expected_constraints):
-        raise ValueError("selection violates a Catalog category constraint")
+    submitted_selection = _derive_selection(
+        catalog, selected_ids, selected_bundles, digest, leaves
+    )
+    _validate_selection_document(submitted_selection, leaves, bundles, roles)
+
+    expanded_ids, ordered_ids = _expand_required_leaf_ids(
+        selected_ids, leaves, bundles, roles, nodes
+    )
+    selection = _derive_selection(
+        catalog,
+        expanded_ids,
+        None,
+        digest,
+        leaves,
+        user_selected_ids=selected_ids,
+    )
+    _validate_selection_document(selection, leaves, bundles, roles)
     desktop_ids = set(categories.get("desktop-environments", {}).get("children", []))
-    if len(set(selected_ids) & desktop_ids) != 1:
+    if len(set(expanded_ids) & desktop_ids) != 1:
         raise ValueError("selection must contain exactly one desktop")
 
     available_packages = set(baseline_packages) | set(candidate_packages)
-    selected_packages = set()
+    baseline_package_set = set(baseline_packages)
+    selected_package_set = set()
+    selected_packages = []
     satisfied = []
     pending = []
-    for leaf_id in selected_ids:
+    pending_set = set()
+    for leaf_id in ordered_ids:
         leaf = leaves[leaf_id]
         availability = leaf.get("availability", {})
         artifact = leaf.get("artifact", {})
-        if (
-            leaf.get("provider") != "pacman"
-            or leaf.get("source") != "arch"
-            or availability.get("status") != "available"
-            or availability.get("channel") != "default"
-            or "x86_64" not in availability.get("architectures", [])
-            or leaf.get("review", {}).get("status") != "reviewed"
-            or artifact.get("type") not in {"package", "package-group"}
-        ):
-            raise ValueError("selected Catalog item is not eligible: " + leaf_id)
+        dependencies = _direct_required_leaf_ids(leaf_id, leaves, bundles, roles, nodes)
+        if dependencies & pending_set:
+            pending.append(leaf_id)
+            pending_set.add(leaf_id)
+            continue
+        if not _installer_eligible(leaf):
+            if leaf.get("kind") == "desktop":
+                raise ValueError("selected desktop is not installer-eligible: " + leaf_id)
+            pending.append(leaf_id)
+            pending_set.add(leaf_id)
+            continue
         if availability.get("offlinePolicy") == "included":
             targets = artifact.get("ids", [])
             missing = sorted(set(targets) - available_packages)
@@ -373,14 +494,18 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
                     "included Catalog artifact is absent from fixed manifests: "
                     + ", ".join(missing)
                 )
-            selected_packages.update(set(targets) - set(baseline_packages))
+            for target in targets:
+                if target not in baseline_package_set and target not in selected_package_set:
+                    selected_package_set.add(target)
+                    selected_packages.append(target)
             satisfied.append(leaf_id)
         else:
             pending.append(leaf_id)
+            pending_set.add(leaf_id)
 
     return {
         "selectionDocument": selection,
-        "selectedPackages": sorted(selected_packages),
+        "selectedPackages": selected_packages,
         "satisfiedItems": satisfied,
         "pendingItems": pending,
         "catalogSha256": digest,

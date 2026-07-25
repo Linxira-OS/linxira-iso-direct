@@ -78,7 +78,7 @@ class PacstrapSelectionTests(unittest.TestCase):
         selection = self.selection(
             {"desktop-gnome": "desktop-environments/desktop-gnome"}
         )
-        with self.assertRaisesRegex(ValueError, "not eligible: desktop-gnome"):
+        with self.assertRaisesRegex(ValueError, "desktop is not installer-eligible: desktop-gnome"):
             self.validate(selection)
 
     def test_online_reviewed_choice_is_pending_not_installed(self):
@@ -105,6 +105,30 @@ class PacstrapSelectionTests(unittest.TestCase):
         )
         self.assertIn("cap-system/component-cups", cups["requestedBy"])
         self.assertIn("cap-system", result["selectionDocument"]["selectedBundleIds"])
+
+    def test_required_dependencies_are_added_before_dependents(self):
+        selection = self.selection({
+            "component-python-data": "cap-data-science/component-python-data",
+            "desktop-plasma": "desktop-environments/desktop-plasma",
+        })
+        result = self.validate(selection)
+        self.assertEqual(
+            result["pendingItems"][:3],
+            ["component-python", "component-python-numeric", "component-python-data"],
+        )
+        self.assertEqual(
+            result["selectionDocument"]["userOverrides"],
+            [{"id": "component-python-data", "selected": True}, {"id": "desktop-plasma", "selected": True}],
+        )
+
+    def test_review_pending_optional_component_is_deferred_not_installed(self):
+        selection = self.selection({
+            "component-uv": "cap-runtime/component-uv",
+            "desktop-plasma": "desktop-environments/desktop-plasma",
+        })
+        result = self.validate(selection)
+        self.assertIn("component-uv", result["pendingItems"])
+        self.assertNotIn("uv", result["selectedPackages"])
 
     def test_catalog_drift_fails_closed(self):
         selection = self.selection()
@@ -138,15 +162,16 @@ class PacstrapSelectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "derived selection provenance"):
             self.validate(selection)
 
-    def test_ineligible_review_channel_selection_is_rejected(self):
+    def test_ineligible_review_channel_selection_is_deferred(self):
         selection = self.selection(
             {
                 "desktop-plasma": "desktop-environments/desktop-plasma",
                 "wps-office": "app-office/wps-office",
             }
         )
-        with self.assertRaisesRegex(ValueError, "not eligible: wps-office"):
-            self.validate(selection)
+        result = self.validate(selection)
+        self.assertIn("wps-office", result["pendingItems"])
+        self.assertEqual(result["selectedPackages"], [])
 
     def test_unknown_fields_cannot_inject_packages(self):
         selection = self.selection()
