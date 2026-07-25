@@ -81,10 +81,11 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn('grub/fonts/unicode.pf2', script)
 
     def test_welcome_autostarts_without_starting_calamares(self):
-        desktop = WELCOME_AUTOSTART.read_text(encoding="utf-8")
-        self.assertIn("Exec=/usr/bin/linxira-welcome --autostart", desktop)
-        self.assertNotIn("calamares", desktop.lower())
-        self.assertNotIn("OnlyShowIn=KDE", desktop)
+        self.assertFalse(WELCOME_AUTOSTART.exists())
+        self.assertIn(
+            "etc/xdg/autostart/org.linxira.Welcome.desktop",
+            (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8"),
+        )
 
     def test_welcome_has_fixed_launchers_and_no_privileged_shell(self):
         script = WELCOME.read_text(encoding="utf-8")
