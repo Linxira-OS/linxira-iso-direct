@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import unittest
 
@@ -6,6 +7,7 @@ PROFILE_ROOT = Path(__file__).parents[1]
 CONFIG_CLI = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-config"
 PACKAGE_CENTER = PROFILE_ROOT.parent / "linxira-package-center/src/linxira-package-center"
 COMPONENT_MANAGER = PROFILE_ROOT.parent / "linxira-component-manager/src/linxira_component_manager/backend.py"
+CATALOG = PROFILE_ROOT.parent / "linxira-catalog/catalog/catalog-v3.json"
 
 
 class ConfigCliTests(unittest.TestCase):
@@ -54,7 +56,11 @@ class ConfigCliTests(unittest.TestCase):
         self.assertIn('category.get("surface") != "applications"', script)
         self.assertIn('review_status != "reviewed"', script)
         self.assertIn('channel == "optional-review"', script)
-        self.assertIn("maxSelected", script)
+
+        catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+        for category in catalog["categories"]:
+            if category["surface"] == "applications":
+                self.assertEqual({"mode": "multi"}, category["selection"], category["id"])
 
     def test_both_v3_uis_bind_apply_to_the_same_catalog(self):
         package_center = PACKAGE_CENTER.read_text(encoding="utf-8")
@@ -64,7 +70,7 @@ class ConfigCliTests(unittest.TestCase):
 
     def test_config_cli_defers_software_installation_to_package_center(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
-        self.assertIn("Software installation is owned by Linxira Package Center", script)
+        self.assertIn("Software installation is owned by Shelly and Quick System Software Setup", script)
         self.assertNotIn("Install (post-install packages)", script)
 
     def test_runtime_status_reports_nix_and_unresolved_wise(self):

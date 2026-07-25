@@ -68,6 +68,23 @@ class BrandingConfigurationTests(unittest.TestCase):
                 "HOOKS=(base systemd plymouth autodetect keyboard filesystems)\n",
             )
 
+    def test_grub_distributor_is_branded_for_installed_system(self):
+        with tempfile.TemporaryDirectory() as temporary_root:
+            root = Path(temporary_root)
+            grub = root / "etc/default/grub"
+            grub.parent.mkdir(parents=True)
+            grub.write_text(
+                'GRUB_DEFAULT=0\nGRUB_DISTRIBUTOR="Arch"\nGRUB_TIMEOUT=5\n',
+                encoding="utf-8",
+            )
+
+            linxirabranding._configure_grub_distributor(root)
+
+            self.assertEqual(
+                grub.read_text(encoding="utf-8"),
+                'GRUB_DEFAULT=0\nGRUB_DISTRIBUTOR="Linxira OS"\nGRUB_TIMEOUT=5\n',
+            )
+
     def test_target_plasma_layout_removes_live_installer_launcher(self):
         with tempfile.TemporaryDirectory() as temporary_root:
             temporary_root = Path(temporary_root)

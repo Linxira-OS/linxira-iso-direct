@@ -80,6 +80,29 @@ def _fix_console_keymap(root):
         vconsole_path.write_text(contents, encoding="utf-8")
 
 
+def _configure_grub_distributor(root):
+    grub_path = Path(root) / "etc/default/grub"
+    distributor = 'GRUB_DISTRIBUTOR="Linxira OS"'
+    if grub_path.exists():
+        contents = grub_path.read_text(encoding="utf-8")
+    else:
+        contents = ""
+
+    if re.search(r"^GRUB_DISTRIBUTOR=", contents, flags=re.MULTILINE):
+        contents = re.sub(
+            r"^GRUB_DISTRIBUTOR=.*$",
+            distributor,
+            contents,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    else:
+        contents = contents.rstrip("\n")
+        contents = contents + ("\n" if contents else "") + distributor + "\n"
+    grub_path.parent.mkdir(parents=True, exist_ok=True)
+    grub_path.write_text(contents, encoding="utf-8")
+
+
 def _plasma_selected():
     selection = libcalamares.globalstorage.value("linxiraSoftwareSelection")
     return isinstance(selection, dict) and "desktop-plasma" in selection.get(
@@ -113,6 +136,7 @@ def run():
         plymouth_config.write_text("[Daemon]\nTheme=linxira\nShowDelay=0\n", encoding="utf-8")
         mkinitcpio_path = Path(root) / "etc/mkinitcpio.conf"
         _fix_console_keymap(root)
+        _configure_grub_distributor(root)
         _remove_obsolete_modules(mkinitcpio_path)
         _enable_plymouth(mkinitcpio_path)
     except (OSError, RuntimeError) as error:

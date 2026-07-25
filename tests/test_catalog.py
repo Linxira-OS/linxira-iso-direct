@@ -33,7 +33,18 @@ class CatalogTests(unittest.TestCase):
         for name in ("desktop", "components", "applications"):
             self.assertNotIn(f"packagechooser@{name}", settings)
             self.assertFalse((MODULES_PATH / f"packagechooser_{name}.conf").exists())
-        self.assertNotIn("module: packagechooser", settings)
+        self.assertIn("packagechooser@bootloader", settings)
+        self.assertTrue((MODULES_PATH / "packagechooser_bootloader.conf").is_file())
+
+    def test_installer_exposes_linxira_system_boot_page(self):
+        settings = SETTINGS_PATH.read_text(encoding="utf-8")
+        bootloader = (MODULES_PATH / "bootloader.conf").read_text(encoding="utf-8")
+        chooser = (MODULES_PATH / "packagechooser_bootloader.conf").read_text(encoding="utf-8")
+        self.assertIn("module: packagechooser", settings)
+        self.assertIn("efiBootLoaderVar: packagechooser_bootloader", bootloader)
+        self.assertIn('step: "系统引导"', chooser)
+        self.assertIn("linux-lts", chooser)
+        self.assertIn("Linxira OS", chooser)
 
     def test_installer_has_no_unfrozen_optional_package_transaction(self):
         settings = SETTINGS_PATH.read_text(encoding="utf-8")
@@ -80,15 +91,16 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(shared.issubset(live))
         self.assertTrue(shared.issubset(target))
 
-    def test_firefox_default_is_part_of_the_fixed_offline_baseline(self):
+    def test_default_browser_policy_keeps_firefox_offline_and_chromium_pending(self):
         packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
         selected = [
             item["id"]
             for item in self.catalog["applications"]
             if item["presentation"]["defaultSelected"]
         ]
-        self.assertEqual(selected, ["firefox"])
+        self.assertEqual(selected, ["firefox", "chromium"])
         self.assertIn("firefox", packages)
+        self.assertNotIn("chromium", packages)
 
 
 if __name__ == "__main__":

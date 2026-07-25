@@ -253,6 +253,22 @@ def run():
             if "linxira-offline" in pacman_conf.read():
                 failures.append("offline repository retained")
 
+    grub_default_path = _target_path(root, "/etc/default/grub")
+    if os.path.isfile(grub_default_path):
+        contents = Path(grub_default_path).read_text(encoding="utf-8")
+        if 'GRUB_DISTRIBUTOR="Linxira OS"' not in contents:
+            failures.append("GRUB distributor is not branded as Linxira OS")
+    else:
+        failures.append("missing file: /etc/default/grub")
+
+    grub_cfg_path = _target_path(root, "/boot/grub/grub.cfg")
+    if os.path.isfile(grub_cfg_path):
+        contents = Path(grub_cfg_path).read_text(encoding="utf-8", errors="replace")
+        if "menuentry 'Arch Linux'" in contents or "Advanced options for Arch Linux" in contents:
+            failures.append("GRUB menu still uses Arch Linux branding")
+        if "Linxira OS" not in contents:
+            failures.append("GRUB menu does not contain Linxira OS branding")
+
     live_only_paths = (
         "/etc/calamares",
         "/etc/xdg/autostart/linxira-installer.desktop",
