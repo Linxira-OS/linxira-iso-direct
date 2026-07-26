@@ -241,7 +241,7 @@ class LiveSessionTests(unittest.TestCase):
                 f'validate_package_artifact "${variable}" {package}', build
             )
         for variable, version in (
-            ("components_package", "0.7.0-1"),
+            ("components_package", "0.7.0-2"),
             ("chwd_detector_package", "0.1.0-1"),
             ("hardware_driver_manager_package", "0.4.0-1"),
         ):

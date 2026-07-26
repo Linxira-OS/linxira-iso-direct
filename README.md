@@ -20,7 +20,7 @@ Build with a verified local package artifact:
   --calamares-package /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
   --artwork-package /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
   --catalog-package /path/to/linxira-catalog-3.0.0-1-any.pkg.tar.zst \
-  --components-package /path/to/linxira-components-0.7.0-1-any.pkg.tar.zst \
+  --components-package /path/to/linxira-components-0.7.0-2-any.pkg.tar.zst \
   --component-manager-package /path/to/linxira-component-manager-0.1.0-1-any.pkg.tar.zst \
   --completion-agent-package /path/to/linxira-completion-agent-0.1.1-1-any.pkg.tar.zst \
   --gaming-manager-package /path/to/linxira-gaming-manager-0.3.0-1-any.pkg.tar.zst \

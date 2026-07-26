@@ -549,6 +549,25 @@ def _enable_target_multilib(root):
         raise ValueError("target pacman configuration has no recognized multilib section")
 
 
+def _pacstrap_command(pacman_config, root, packages):
+    return [
+        "pacstrap",
+        "-C",
+        pacman_config,
+        "-K",
+        "-M",
+        root,
+        *packages,
+    ]
+
+
+def _pacstrap_commands(pacman_config, root, baseline_packages, selected_packages):
+    commands = [_pacstrap_command(pacman_config, root, baseline_packages)]
+    if selected_packages:
+        commands.append(_pacstrap_command(pacman_config, root, selected_packages))
+    return commands
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -579,11 +598,11 @@ def run():
         return "Software selection is invalid", str(error)
 
     selected_packages = result["selectedPackages"]
-    command = ["pacstrap", "-C", pacman_config, "-K", "-M", root]
-    command.extend(baseline_packages)
-    command.extend(selected_packages)
-    if _run(command) != 0:
-        return "Package installation failed", "pacstrap did not complete successfully."
+    for command in _pacstrap_commands(
+        pacman_config, root, baseline_packages, selected_packages
+    ):
+        if _run(command) != 0:
+            return "Package installation failed", "pacstrap did not complete successfully."
 
     try:
         _enable_target_multilib(root)

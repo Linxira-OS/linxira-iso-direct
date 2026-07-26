@@ -69,6 +69,42 @@ class PacstrapSelectionTests(unittest.TestCase):
                 self.config, self.baseline, self.candidates
             )
 
+    def test_baseline_is_installed_before_selected_packages(self):
+        commands = linxirapacstrap._pacstrap_commands(
+            "/etc/calamares/linxira-pacman.conf",
+            "/target",
+            ["base", "linxira-components"],
+            ["firefox"],
+        )
+        self.assertEqual(
+            commands,
+            [
+                [
+                    "pacstrap",
+                    "-C",
+                    "/etc/calamares/linxira-pacman.conf",
+                    "-K",
+                    "-M",
+                    "/target",
+                    "base",
+                    "linxira-components",
+                ],
+                [
+                    "pacstrap",
+                    "-C",
+                    "/etc/calamares/linxira-pacman.conf",
+                    "-K",
+                    "-M",
+                    "/target",
+                    "firefox",
+                ],
+            ],
+        )
+        self.assertEqual(
+            len(linxirapacstrap._pacstrap_commands("config", "root", ["base"], [])),
+            1,
+        )
+
     def test_plasma_default_is_satisfied_without_candidate_additions(self):
         result = self.validate(self.selection())
         self.assertEqual(result["selectedPackages"], [])

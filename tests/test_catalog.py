@@ -81,7 +81,8 @@ class CatalogTests(unittest.TestCase):
         build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
         self.assertIn('target_packages+=("${candidate_packages[@]}")', build)
         pacstrap = (LOCAL_MODULES_PATH / "linxirapacstrap/main.py").read_text(encoding="utf-8")
-        self.assertIn('command.extend(selected_packages)', pacstrap)
+        self.assertIn("def _pacstrap_commands", pacstrap)
+        self.assertIn("for command in _pacstrap_commands(", pacstrap)
         self.assertNotIn('selection["directPackageTargets"]', pacstrap)
 
     def test_shared_desktop_plumbing_is_in_live_and_target(self):
