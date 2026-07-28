@@ -4,8 +4,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import queue
 import re
 import subprocess
+import threading
 import time
 
 import libcalamares
@@ -29,7 +31,7 @@ def pretty_name():
     return "Install Linxira OS packages"
 
 
-def _run(command):
+def _run(command, timeout_seconds=None):
     libcalamares.utils.debug("linxirapacstrap: " + " ".join(command))
     process = subprocess.Popen(
         command,
@@ -38,24 +40,53 @@ def _run(command):
         text=True,
         bufsize=1,
     )
+    lines = queue.Queue()
+
+    def read_output():
+        for line in process.stdout:
+            lines.put(line)
+
+    reader = threading.Thread(target=read_output, daemon=True)
+    reader.start()
     output = []
-    for line in process.stdout:
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
+    timed_out = False
+    while process.poll() is None:
+        try:
+            line = lines.get(timeout=1)
+        except queue.Empty:
+            line = ""
         line = line.rstrip()
         if line:
             output.append(line)
             libcalamares.utils.debug("linxirapacstrap: " + line)
-    returncode = process.wait()
+        if deadline is not None and time.monotonic() >= deadline:
+            process.kill()
+            timed_out = True
+    reader.join()
+    while not lines.empty():
+        line = lines.get().rstrip()
+        if line:
+            output.append(line)
+            libcalamares.utils.debug("linxirapacstrap: " + line)
     _run.last_output = "\n".join(output)
-    return returncode
+    if timed_out:
+        _run.last_output = (
+            "command timed out after " + str(timeout_seconds) + " seconds"
+            + ("\n" + _run.last_output if _run.last_output else "")
+        )
+        libcalamares.utils.debug("linxirapacstrap: " + _run.last_output)
+        return 124
+    return process.returncode
 
 
 _run.last_output = ""
 
 
-def _run_with_retries(command, description, attempts=3):
+def _run_with_retries(command, description, attempts=3, timeout_seconds=None):
     failures = []
     for attempt in range(1, attempts + 1):
-        returncode = _run(command)
+        returncode = _run(command, timeout_seconds=timeout_seconds)
         if returncode == 0:
             return None
         detail = _run.last_output.strip() or "no command output"
@@ -628,10 +659,13 @@ def _pacstrap_commands(pacman_config, root, baseline_packages, selected_packages
     return commands
 
 
-def _online_upgrade_command(root, packages):
+def _online_upgrade_command(root, packages, timeout_seconds):
     return [
         "arch-chroot",
         root,
+        "/usr/bin/timeout",
+        "--foreground",
+        str(timeout_seconds),
         "/usr/bin/pacman",
         "-Syyu",
         "--needed",
@@ -656,6 +690,42 @@ def _validate_online_target(root):
         raise ValueError("target pacman mirrorlist has no enabled server")
     if not keyring_path.is_file() or keyring_path.stat().st_size == 0:
         raise ValueError("target pacman keyring is not initialized")
+
+
+def _rank_target_mirrors(root, timeout_seconds):
+    mirrorlist = Path(root) / "etc/pacman.d/mirrorlist"
+    ranked = mirrorlist.with_name("mirrorlist.linxira-ranked")
+    original = mirrorlist.read_bytes()
+    ranked.unlink(missing_ok=True)
+    error = _run_with_retries(
+        [
+            "/usr/bin/reflector",
+            "--protocol",
+            "https",
+            "--latest",
+            "20",
+            "--sort",
+            "rate",
+            "--save",
+            str(ranked),
+        ],
+        "official mirror ranking",
+        attempts=1,
+        timeout_seconds=timeout_seconds,
+    )
+    try:
+        contents = ranked.read_text(encoding="utf-8")
+    except OSError:
+        contents = ""
+    if error or not re.search(r"(?m)^\s*Server\s*=\s*https://\S+", contents):
+        ranked.unlink(missing_ok=True)
+        mirrorlist.write_bytes(original)
+        libcalamares.utils.debug(
+            "linxirapacstrap: mirror ranking failed; retaining the original mirrorlist"
+        )
+        return
+    ranked.replace(mirrorlist)
+    libcalamares.utils.debug("linxirapacstrap: target mirrorlist ranked with reflector")
 
 
 def run():
@@ -687,6 +757,17 @@ def run():
         retry_count = config.get("retryCount", 3)
         if type(retry_count) is not int or not 1 <= retry_count <= 5:
             raise ValueError("retryCount must be an integer from 1 through 5")
+        mirror_rank_timeout = config.get("mirrorRankTimeoutSeconds", 120)
+        if type(mirror_rank_timeout) is not int or not 30 <= mirror_rank_timeout <= 300:
+            raise ValueError("mirrorRankTimeoutSeconds must be an integer from 30 through 300")
+        online_transaction_timeout = config.get("onlineTransactionTimeoutSeconds", 600)
+        if type(online_transaction_timeout) is not int or not 300 <= online_transaction_timeout <= 1800:
+            raise ValueError(
+                "onlineTransactionTimeoutSeconds must be an integer from 300 through 1800"
+            )
+        online_transaction_attempts = config.get("onlineTransactionAttempts", 1)
+        if type(online_transaction_attempts) is not int or not 1 <= online_transaction_attempts <= 2:
+            raise ValueError("onlineTransactionAttempts must be an integer from 1 through 2")
     except (OSError, TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         return "Software selection is invalid", str(error)
 
@@ -706,9 +787,16 @@ def run():
         return "Target configuration could not be finalized", str(error)
 
     if result["onlinePackages"]:
-        command = _online_upgrade_command(root, result["onlinePackages"])
+        _rank_target_mirrors(root, mirror_rank_timeout)
+        _validate_online_target(root)
+        command = _online_upgrade_command(
+            root, result["onlinePackages"], online_transaction_timeout
+        )
         error = _run_with_retries(
-            command, "target official repository full-upgrade transaction", retry_count
+            command,
+            "target official repository full-upgrade transaction",
+            online_transaction_attempts,
+            timeout_seconds=online_transaction_timeout,
         )
         if error:
             return "Online package installation failed", error

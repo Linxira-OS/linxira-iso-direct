@@ -143,10 +143,13 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["onlinePackages"], ["chromium", "libreoffice-fresh"])
         self.assertEqual(result["pendingItems"], [])
         self.assertEqual(
-            linxirapacstrap._online_upgrade_command("/target", result["onlinePackages"]),
+            linxirapacstrap._online_upgrade_command(
+                "/target", result["onlinePackages"], 600
+            ),
             [
-                "arch-chroot", "/target", "/usr/bin/pacman", "-Syyu",
-                "--needed", "--noconfirm", "chromium", "libreoffice-fresh",
+                "arch-chroot", "/target", "/usr/bin/timeout", "--foreground", "600",
+                "/usr/bin/pacman", "-Syyu", "--needed", "--noconfirm", "chromium",
+                "libreoffice-fresh",
             ],
         )
 
@@ -323,6 +326,45 @@ class PacstrapSelectionTests(unittest.TestCase):
             (root / "etc/pacman.d/gnupg/pubring.gpg").unlink()
             with self.assertRaisesRegex(ValueError, "keyring"):
                 linxirapacstrap._validate_online_target(root)
+
+    def test_mirror_ranking_replaces_target_list_only_with_ranked_https_servers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirrorlist = root / "etc/pacman.d/mirrorlist"
+            mirrorlist.parent.mkdir(parents=True)
+            mirrorlist.write_text("Server = https://fallback.example/$repo/os/$arch\n", encoding="utf-8")
+
+            def rank(command, _description, **_kwargs):
+                Path(command[-1]).write_text(
+                    "Server = https://fast.example/$repo/os/$arch\n", encoding="utf-8"
+                )
+                return None
+
+            with mock.patch.object(linxirapacstrap, "_run_with_retries", side_effect=rank) as run:
+                linxirapacstrap._rank_target_mirrors(root, 120)
+
+            self.assertEqual(
+                mirrorlist.read_text(encoding="utf-8"),
+                "Server = https://fast.example/$repo/os/$arch\n",
+            )
+            command = run.call_args.args[0]
+            self.assertEqual(command[:7], [
+                "/usr/bin/reflector", "--protocol", "https", "--latest", "20", "--sort", "rate",
+            ])
+            self.assertEqual(run.call_args.kwargs["timeout_seconds"], 120)
+
+    def test_mirror_ranking_keeps_original_list_after_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirrorlist = root / "etc/pacman.d/mirrorlist"
+            mirrorlist.parent.mkdir(parents=True)
+            original = "Server = https://fallback.example/$repo/os/$arch\n"
+            mirrorlist.write_text(original, encoding="utf-8")
+            with mock.patch.object(
+                linxirapacstrap, "_run_with_retries", return_value="reflector timed out"
+            ):
+                linxirapacstrap._rank_target_mirrors(root, 120)
+            self.assertEqual(mirrorlist.read_text(encoding="utf-8"), original)
 
     def test_retry_error_contains_each_exit_and_command_output(self):
         with mock.patch.object(linxirapacstrap, "_run", side_effect=[1, 2]), mock.patch.object(
