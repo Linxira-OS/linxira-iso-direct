@@ -17,20 +17,20 @@ Build with a verified local package artifact:
 ```bash
 ./build-direct-iso.sh \
   --shelly-package /path/to/shelly-2.4.1.4-1-x86_64.pkg.tar.zst \
-  --calamares-package /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
-  --artwork-package /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
-  --catalog-package /path/to/linxira-catalog-3.0.0-1-any.pkg.tar.zst \
+  --calamares-package /path/to/calamares-3.3.14-9-x86_64.pkg.tar.zst \
+  --artwork-package /path/to/linxira-artwork-1.0.3-4-any.pkg.tar.zst \
+  --catalog-package /path/to/linxira-catalog-3.0.0-5-any.pkg.tar.zst \
   --components-package /path/to/linxira-components-0.7.0-3-any.pkg.tar.zst \
-  --component-manager-package /path/to/linxira-component-manager-0.1.0-1-any.pkg.tar.zst \
-  --completion-agent-package /path/to/linxira-completion-agent-0.1.1-1-any.pkg.tar.zst \
-  --gaming-manager-package /path/to/linxira-gaming-manager-0.3.0-1-any.pkg.tar.zst \
+  --component-manager-package /path/to/linxira-component-manager-0.1.0-4-any.pkg.tar.zst \
+  --completion-agent-package /path/to/linxira-completion-agent-0.1.1-2-any.pkg.tar.zst \
+  --gaming-manager-package /path/to/linxira-gaming-manager-0.3.0-2-any.pkg.tar.zst \
   --chwd-detector-package /path/to/linxira-chwd-detector-0.1.0-1-x86_64.pkg.tar.zst \
-  --hardware-driver-manager-package /path/to/linxira-hardware-driver-manager-0.4.0-1-any.pkg.tar.zst \
-  --recovery-diagnostics-package /path/to/linxira-recovery-diagnostics-0.2.0-1-any.pkg.tar.zst \
-  --update-package /path/to/linxira-update-0.1.0-1-any.pkg.tar.zst \
-  --config-hub-package /path/to/linxira-config-hub-2.2.0-1-any.pkg.tar.zst \
-  --package-center-package /path/to/linxira-package-center-0.2.1-1-any.pkg.tar.zst \
-  --welcome-package /path/to/linxira-welcome-1.0.0-2-any.pkg.tar.zst \
+  --hardware-driver-manager-package /path/to/linxira-hardware-driver-manager-0.4.0-2-any.pkg.tar.zst \
+  --recovery-diagnostics-package /path/to/linxira-recovery-diagnostics-0.2.0-2-any.pkg.tar.zst \
+  --update-package /path/to/linxira-update-0.1.0-3-any.pkg.tar.zst \
+  --config-hub-package /path/to/linxira-config-hub-2.2.1-1-any.pkg.tar.zst \
+  --package-center-package /path/to/linxira-package-center-0.2.1-2-any.pkg.tar.zst \
+  --welcome-package /path/to/linxira-welcome-1.0.0-9-any.pkg.tar.zst \
   --plymouth-theme-directory /path/to/linxira-plymouth-theme \
   --output ./out
 ```
@@ -90,7 +90,7 @@ using a rootless Arch root:
 
 ```bash
 bash scripts/validate-calamares-config.sh \
-  /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
-  /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
+  /path/to/calamares-3.3.14-9-x86_64.pkg.tar.zst \
+  /path/to/linxira-artwork-1.0.3-4-any.pkg.tar.zst \
   /path/to/rootless-arch-root
 ```

@@ -270,7 +270,7 @@ validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-dr
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
   usr/share/metainfo/org.linxira.HardwareDriverManager.metainfo.xml \
   usr/share/licenses/linxira-hardware-driver-manager/LICENSE
-validate_package_version "$hardware_driver_manager_package" 0.4.0-1
+validate_package_version "$hardware_driver_manager_package" 0.4.0-2
 validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagnostics \
   usr/bin/linxira-recovery-diagnostics \
   usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \
