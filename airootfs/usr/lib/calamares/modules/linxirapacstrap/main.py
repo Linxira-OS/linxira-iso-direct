@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 
 import libcalamares
 
@@ -37,11 +38,37 @@ def _run(command):
         text=True,
         bufsize=1,
     )
+    output = []
     for line in process.stdout:
         line = line.rstrip()
         if line:
+            output.append(line)
             libcalamares.utils.debug("linxirapacstrap: " + line)
-    return process.wait()
+    returncode = process.wait()
+    _run.last_output = "\n".join(output)
+    return returncode
+
+
+_run.last_output = ""
+
+
+def _run_with_retries(command, description, attempts=3):
+    failures = []
+    for attempt in range(1, attempts + 1):
+        returncode = _run(command)
+        if returncode == 0:
+            return None
+        detail = _run.last_output.strip() or "no command output"
+        failures.append(f"attempt {attempt}/{attempts} exited {returncode}: {detail}")
+        if attempt < attempts:
+            time.sleep(attempt * 2)
+    return (
+        description
+        + " failed after retries\ncommand: "
+        + " ".join(command)
+        + "\n"
+        + "\n".join(failures)
+    )
 
 
 def _microcode_package():
@@ -466,8 +493,10 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
 
     available_packages = set(baseline_packages) | set(candidate_packages)
     baseline_package_set = set(baseline_packages)
-    selected_package_set = set()
-    selected_packages = []
+    offline_package_set = set()
+    offline_packages = []
+    online_package_set = set()
+    online_packages = []
     satisfied = []
     pending = []
     pending_set = set()
@@ -476,7 +505,17 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
         availability = leaf.get("availability", {})
         artifact = leaf.get("artifact", {})
         dependencies = _direct_required_leaf_ids(leaf_id, leaves, bundles, roles, nodes)
+        operation_dependencies = {
+            dependency_id
+            for dependency_id in leaf.get("requires", [])
+            if isinstance(nodes.get(dependency_id), dict)
+            and nodes[dependency_id].get("kind") == "operation"
+        }
         if dependencies & pending_set:
+            pending.append(leaf_id)
+            pending_set.add(leaf_id)
+            continue
+        if operation_dependencies:
             pending.append(leaf_id)
             pending_set.add(leaf_id)
             continue
@@ -486,7 +525,8 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
             pending.append(leaf_id)
             pending_set.add(leaf_id)
             continue
-        if availability.get("offlinePolicy") == "included":
+        offline_policy = availability.get("offlinePolicy")
+        if offline_policy == "included":
             targets = artifact.get("ids", [])
             missing = sorted(set(targets) - available_packages)
             if missing:
@@ -495,9 +535,15 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
                     + ", ".join(missing)
                 )
             for target in targets:
-                if target not in baseline_package_set and target not in selected_package_set:
-                    selected_package_set.add(target)
-                    selected_packages.append(target)
+                if target not in baseline_package_set and target not in offline_package_set:
+                    offline_package_set.add(target)
+                    offline_packages.append(target)
+            satisfied.append(leaf_id)
+        elif offline_policy in {"online-only", "defer-with-consent"}:
+            for target in artifact.get("ids", []):
+                if target not in online_package_set:
+                    online_package_set.add(target)
+                    online_packages.append(target)
             satisfied.append(leaf_id)
         else:
             pending.append(leaf_id)
@@ -505,7 +551,8 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
 
     return {
         "selectionDocument": selection,
-        "selectedPackages": selected_packages,
+        "selectedPackages": offline_packages,
+        "onlinePackages": online_packages,
         "satisfiedItems": satisfied,
         "pendingItems": pending,
         "catalogSha256": digest,
@@ -517,6 +564,7 @@ def _write_receipt(root, result, baseline_packages, selected_packages):
     receipt_path = Path(root) / "var/lib/linxira/installer-selection.json"
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     selection = result["selectionDocument"]
+    satisfied = set(result["satisfiedItems"])
     receipt = {
         "schemaVersion": "org.linxira.installer.selection-receipt.v1",
         "catalogVersion": 3,
@@ -526,6 +574,19 @@ def _write_receipt(root, result, baseline_packages, selected_packages):
         "selectedBundleIds": selection["selectedBundleIds"],
         "satisfiedItems": result["satisfiedItems"],
         "pendingItems": result["pendingItems"],
+        "installedItems": result["satisfiedItems"],
+        "deferredItems": result["pendingItems"],
+        "itemStatuses": [
+            {
+                "id": leaf_id,
+                "status": (
+                    "installed"
+                    if leaf_id in satisfied
+                    else "explicitly-deferred"
+                ),
+            }
+            for leaf_id in selection["selectedLeafIds"]
+        ],
         "selectionDocument": selection,
         "installedBaselinePackages": baseline_packages,
         "installedSelectedPackages": selected_packages,
@@ -555,7 +616,6 @@ def _pacstrap_command(pacman_config, root, packages):
         "-C",
         pacman_config,
         "-K",
-        "-M",
         root,
         *packages,
     ]
@@ -566,6 +626,36 @@ def _pacstrap_commands(pacman_config, root, baseline_packages, selected_packages
     if selected_packages:
         commands.append(_pacstrap_command(pacman_config, root, selected_packages))
     return commands
+
+
+def _online_upgrade_command(root, packages):
+    return [
+        "arch-chroot",
+        root,
+        "/usr/bin/pacman",
+        "-Syyu",
+        "--needed",
+        "--noconfirm",
+        *packages,
+    ]
+
+
+def _validate_online_target(root):
+    root_path = Path(root)
+    config_path = root_path / "etc/pacman.conf"
+    mirrorlist_path = root_path / "etc/pacman.d/mirrorlist"
+    keyring_path = root_path / "etc/pacman.d/gnupg/pubring.gpg"
+    config = config_path.read_text(encoding="utf-8")
+    mirrorlist = mirrorlist_path.read_text(encoding="utf-8")
+    if "linxira-offline" in config:
+        raise ValueError("target pacman configuration retains the offline repository")
+    for repository in ("core", "extra"):
+        if not re.search(rf"(?m)^\[{re.escape(repository)}\]\s*$", config):
+            raise ValueError("target pacman configuration is missing official repository: " + repository)
+    if not re.search(r"(?m)^\s*Server\s*=\s*\S+", mirrorlist):
+        raise ValueError("target pacman mirrorlist has no enabled server")
+    if not keyring_path.is_file() or keyring_path.stat().st_size == 0:
+        raise ValueError("target pacman keyring is not initialized")
 
 
 def run():
@@ -594,6 +684,9 @@ def run():
         if microcode:
             baseline_packages.append(microcode)
         result = _catalog_selection(config, baseline_packages, candidate_packages)
+        retry_count = config.get("retryCount", 3)
+        if type(retry_count) is not int or not 1 <= retry_count <= 5:
+            raise ValueError("retryCount must be an integer from 1 through 5")
     except (OSError, TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         return "Software selection is invalid", str(error)
 
@@ -601,13 +694,33 @@ def run():
     for command in _pacstrap_commands(
         pacman_config, root, baseline_packages, selected_packages
     ):
-        if _run(command) != 0:
-            return "Package installation failed", "pacstrap did not complete successfully."
+        error = _run_with_retries(command, "offline pacstrap", retry_count)
+        if error:
+            return "Package installation failed", error
 
     try:
         _enable_target_multilib(root)
-        _write_receipt(root, result, baseline_packages, selected_packages)
+        if result["onlinePackages"]:
+            _validate_online_target(root)
     except (OSError, ValueError) as error:
+        return "Target configuration could not be finalized", str(error)
+
+    if result["onlinePackages"]:
+        command = _online_upgrade_command(root, result["onlinePackages"])
+        error = _run_with_retries(
+            command, "target official repository full-upgrade transaction", retry_count
+        )
+        if error:
+            return "Online package installation failed", error
+
+    try:
+        _write_receipt(
+            root,
+            result,
+            baseline_packages,
+            selected_packages + result["onlinePackages"],
+        )
+    except OSError as error:
         return "Target configuration could not be finalized", str(error)
 
     libcalamares.job.setprogress(1.0)

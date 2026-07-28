@@ -9,10 +9,10 @@ navigation: widget
 strings:
   productName: Linxira OS
   shortProductName: Linxira
-  version: Direct Arch
-  shortVersion: Direct Arch
-  versionedName: Linxira OS Direct Arch
-  shortVersionedName: Linxira Direct Arch
+  version: Rolling Release
+  shortVersion: Rolling
+  versionedName: Linxira OS Rolling Release
+  shortVersionedName: Linxira Rolling
   bootloaderEntryName: Linxira OS
 images:
   productLogo: linxira-logo.svg

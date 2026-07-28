@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import unittest
+import xml.etree.ElementTree as ET
 
 
 PROFILE_ROOT = Path(__file__).parents[1]
@@ -25,6 +26,9 @@ BOOT_CONFIGS = (
 LIVE_PACKAGES = PROFILE_ROOT / "packages.x86_64"
 TARGET_PACKAGES = PROFILE_ROOT / "target-packages.x86_64"
 PACMAN_CONFIG = PROFILE_ROOT / "pacman.conf"
+INSTALLER_METAINFO = (
+    PROFILE_ROOT / "airootfs/usr/share/metainfo/org.linxira.Installer.metainfo.xml"
+)
 
 
 class LiveSessionTests(unittest.TestCase):
@@ -182,8 +186,35 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("/tmp/linxira-installer.log", script)
         self.assertIn("konsole --fullscreen --hold", script)
         self.assertIn("pkexec /usr/bin/calamares", script)
+        self.assertIn("lock=/tmp/linxira-installer.lock", script)
+        self.assertIn("flock -n 9", script)
+        self.assertIn("status == 87", script)
         self.assertNotIn("is-active polkit.service", script)
         self.assertIn("if (( status != 0 ))", script)
+
+    def test_installer_metadata_owns_its_maintenance_links(self):
+        root = ET.parse(INSTALLER_METAINFO).getroot()
+        self.assertEqual(root.findtext("id"), "org.linxira.Installer")
+        self.assertEqual(
+            root.find("launchable").text,
+            "linxira-installer.desktop",
+        )
+        urls = {item.attrib.get("type"): item.text for item in root.findall("url")}
+        self.assertEqual(
+            urls["vcs-browser"],
+            "https://github.com/Linxira-OS/linxira-iso-direct",
+        )
+        self.assertEqual(
+            urls["bugtracker"],
+            "https://github.com/Linxira-OS/linxira-iso-direct/issues",
+        )
+
+    def test_installer_branding_is_linxira_rolling_release(self):
+        branding = (
+            PROFILE_ROOT / "airootfs/etc/calamares/branding/linxira/branding.desc"
+        ).read_text(encoding="utf-8")
+        self.assertIn("version: Rolling Release", branding)
+        self.assertNotIn("Direct Arch", branding)
 
     def test_calamares_sequence_has_valid_indentation(self):
         settings = (PROFILE_ROOT / "airootfs/etc/calamares/settings.conf").read_text(encoding="utf-8")
@@ -241,7 +272,7 @@ class LiveSessionTests(unittest.TestCase):
                 f'validate_package_artifact "${variable}" {package}', build
             )
         for variable, version in (
-            ("components_package", "0.7.0-2"),
+            ("components_package", "0.7.0-3"),
             ("chwd_detector_package", "0.1.0-1"),
             ("hardware_driver_manager_package", "0.4.0-1"),
         ):

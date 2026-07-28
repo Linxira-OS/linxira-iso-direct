@@ -20,7 +20,7 @@ Build with a verified local package artifact:
   --calamares-package /path/to/calamares-3.3.14-1-x86_64.pkg.tar.zst \
   --artwork-package /path/to/linxira-artwork-1.0.3-1-any.pkg.tar.zst \
   --catalog-package /path/to/linxira-catalog-3.0.0-1-any.pkg.tar.zst \
-  --components-package /path/to/linxira-components-0.7.0-2-any.pkg.tar.zst \
+  --components-package /path/to/linxira-components-0.7.0-3-any.pkg.tar.zst \
   --component-manager-package /path/to/linxira-component-manager-0.1.0-1-any.pkg.tar.zst \
   --completion-agent-package /path/to/linxira-completion-agent-0.1.1-1-any.pkg.tar.zst \
   --gaming-manager-package /path/to/linxira-gaming-manager-0.3.0-1-any.pkg.tar.zst \
@@ -62,6 +62,12 @@ mounts, and absence of live-installer content before reporting success.
 The installer uses a fixed offline Plasma baseline and a separate reviewed
 offline candidate manifest. The repository contains their dependency union,
 but pacstrap adds only eligible included artifacts selected through Catalog v3.
+Reviewed official Arch selections marked online-only are installed into the
+Calamares target before reboot. After the offline baseline initializes the
+target's official pacman configuration, mirrors, and keyring, Calamares runs a
+retried `pacman -Syyu --needed` target-root transaction containing those package
+targets. Unsupported providers and review or license-deferred selections are
+recorded as explicitly deferred for Completion instead.
 Legacy
 flat desktop, component, and application chooser pages were removed because
 they used Catalog v2 and could start an unfrozen online package transaction.

@@ -84,7 +84,6 @@ class PacstrapSelectionTests(unittest.TestCase):
                     "-C",
                     "/etc/calamares/linxira-pacman.conf",
                     "-K",
-                    "-M",
                     "/target",
                     "base",
                     "linxira-components",
@@ -94,7 +93,6 @@ class PacstrapSelectionTests(unittest.TestCase):
                     "-C",
                     "/etc/calamares/linxira-pacman.conf",
                     "-K",
-                    "-M",
                     "/target",
                     "firefox",
                 ],
@@ -104,6 +102,7 @@ class PacstrapSelectionTests(unittest.TestCase):
             len(linxirapacstrap._pacstrap_commands("config", "root", ["base"], [])),
             1,
         )
+        self.assertNotIn("-M", commands[0])
 
     def test_plasma_default_is_satisfied_without_candidate_additions(self):
         result = self.validate(self.selection())
@@ -117,7 +116,7 @@ class PacstrapSelectionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "desktop is not installer-eligible: desktop-gnome"):
             self.validate(selection)
 
-    def test_online_reviewed_choice_is_pending_not_installed(self):
+    def test_online_reviewed_choice_is_installed_in_target(self):
         selection = self.selection(
             {
                 "chromium": "app-web/chromium",
@@ -126,7 +125,30 @@ class PacstrapSelectionTests(unittest.TestCase):
         )
         result = self.validate(selection)
         self.assertEqual(result["selectedPackages"], [])
-        self.assertEqual(result["pendingItems"], ["chromium"])
+        self.assertEqual(result["onlinePackages"], ["chromium"])
+        self.assertEqual(result["pendingItems"], [])
+        self.assertIn("chromium", result["satisfiedItems"])
+
+    def test_chromium_and_libreoffice_fresh_share_full_upgrade_transaction(self):
+        office = next(
+            item
+            for item in self.catalog["applications"]
+            if "libreoffice-fresh" in item.get("artifact", {}).get("ids", [])
+        )
+        result = self.validate(self.selection({
+            "chromium": "unused",
+            office["id"]: "unused",
+            "desktop-plasma": "unused",
+        }))
+        self.assertEqual(result["onlinePackages"], ["chromium", "libreoffice-fresh"])
+        self.assertEqual(result["pendingItems"], [])
+        self.assertEqual(
+            linxirapacstrap._online_upgrade_command("/target", result["onlinePackages"]),
+            [
+                "arch-chroot", "/target", "/usr/bin/pacman", "-Syyu",
+                "--needed", "--noconfirm", "chromium", "libreoffice-fresh",
+            ],
+        )
 
     def test_component_selection_has_catalog_root_provenance(self):
         selection = self.selection({
@@ -141,6 +163,9 @@ class PacstrapSelectionTests(unittest.TestCase):
         )
         self.assertIn("cap-system/component-cups", cups["requestedBy"])
         self.assertIn("cap-system", result["selectionDocument"]["selectedBundleIds"])
+        self.assertIn("component-cups", result["pendingItems"])
+        self.assertNotIn("cups", result["onlinePackages"])
+        self.assertNotIn("component-cups", result["satisfiedItems"])
 
     def test_required_dependencies_are_added_before_dependents(self):
         selection = self.selection({
@@ -149,7 +174,7 @@ class PacstrapSelectionTests(unittest.TestCase):
         })
         result = self.validate(selection)
         self.assertEqual(
-            result["pendingItems"][:3],
+            result["satisfiedItems"][:3],
             ["component-python", "component-python-numeric", "component-python-data"],
         )
         self.assertEqual(
@@ -246,6 +271,12 @@ class PacstrapSelectionTests(unittest.TestCase):
             )
         self.assertEqual(receipt["installedBaselinePackages"], self.baseline)
         self.assertEqual(receipt["installedSelectedPackages"], [])
+        self.assertEqual(receipt["installedItems"], ["desktop-plasma"])
+        self.assertEqual(receipt["deferredItems"], [])
+        self.assertEqual(
+            receipt["itemStatuses"],
+            [{"id": "desktop-plasma", "status": "installed"}],
+        )
         self.assertEqual(
             receipt["selectionDocument"]["schemaVersion"],
             "org.linxira.component-selection.v1",
@@ -273,6 +304,38 @@ class PacstrapSelectionTests(unittest.TestCase):
             contents = config.read_text(encoding="utf-8")
         self.assertIn("[multilib]\nInclude = /etc/pacman.d/mirrorlist", contents)
         self.assertNotIn("#[multilib]", contents)
+
+    def test_online_target_requires_official_config_mirror_and_keyring(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc/pacman.d/gnupg").mkdir(parents=True)
+            (root / "etc/pacman.conf").write_text(
+                "[core]\nInclude = /etc/pacman.d/mirrorlist\n"
+                "[extra]\nInclude = /etc/pacman.d/mirrorlist\n",
+                encoding="utf-8",
+            )
+            (root / "etc/pacman.d/mirrorlist").write_text(
+                "Server = https://mirror.example/$repo/os/$arch\n", encoding="utf-8"
+            )
+            (root / "etc/pacman.d/gnupg/pubring.gpg").write_bytes(b"keyring")
+            linxirapacstrap._validate_online_target(root)
+
+            (root / "etc/pacman.d/gnupg/pubring.gpg").unlink()
+            with self.assertRaisesRegex(ValueError, "keyring"):
+                linxirapacstrap._validate_online_target(root)
+
+    def test_retry_error_contains_each_exit_and_command_output(self):
+        with mock.patch.object(linxirapacstrap, "_run", side_effect=[1, 2]), mock.patch.object(
+            linxirapacstrap.time, "sleep"
+        ):
+            linxirapacstrap._run.last_output = "mirror timeout"
+            error = linxirapacstrap._run_with_retries(
+                ["arch-chroot", "/target", "/usr/bin/pacman", "-Syyu"],
+                "target transaction",
+                attempts=2,
+            )
+        self.assertIn("attempt 1/2 exited 1: mirror timeout", error)
+        self.assertIn("attempt 2/2 exited 2: mirror timeout", error)
 
 
 if __name__ == "__main__":

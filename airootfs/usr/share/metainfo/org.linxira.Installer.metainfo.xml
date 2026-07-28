@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.linxira.Installer</id>
+  <name>Install Linxira OS</name>
+  <summary>Install Linxira OS and reviewed software selections</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <launchable type="desktop-id">linxira-installer.desktop</launchable>
+  <provides><binary>linxira-installer-shell</binary></provides>
+  <description>
+    <p>The Linxira installer configures Calamares to install the base system, reviewed offline software, and selected official online packages into the target system before first boot.</p>
+  </description>
+  <developer id="org.linxira"><name>Linxira OS contributors</name></developer>
+  <url type="homepage">https://linxira-os.github.io/</url>
+  <url type="vcs-browser">https://github.com/Linxira-OS/linxira-iso-direct</url>
+  <url type="bugtracker">https://github.com/Linxira-OS/linxira-iso-direct/issues</url>
+  <url type="help">https://linxira-os.github.io/linxira-wiki/</url>
+  <content_rating type="oars-1.1" />
+</component>

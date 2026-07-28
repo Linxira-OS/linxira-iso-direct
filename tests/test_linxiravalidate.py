@@ -1,10 +1,12 @@
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = (
@@ -54,7 +56,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
             '"/usr/bin/linxira-recovery-diagnostics"',
             '"/usr/bin/linxira-components-service"',
             '"/usr/lib/systemd/system/linxira-components.service"',
-            '"linxira-components": "0.7.0-2"',
+            '"linxira-components": "0.7.0-3"',
             '"linxira-hardware-driver-manager": "0.4.0-1"',
             '"/usr/bin/linxira-components-worker"',
             '"/usr/lib/systemd/system/linxira-components-worker@.service"',
@@ -69,6 +71,141 @@ class InstalledSystemValidationTests(unittest.TestCase):
     def test_validator_requires_installer_selection_receipt(self):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn('"/var/lib/linxira/installer-selection.json"', source)
+
+    def test_selected_catalog_packages_are_returned_for_validation(self):
+        with tempfile.TemporaryDirectory() as temporary_root:
+            root = Path(temporary_root)
+            catalog_path = root / "usr/share/linxira/catalog/catalog-v3.json"
+            catalog_path.parent.mkdir(parents=True)
+            catalog_path.write_text(json.dumps({
+                "catalogVersion": 3,
+                "release": "test",
+                "desktops": [{
+                    "id": "desktop-plasma",
+                    "provider": "pacman",
+                    "source": "arch",
+                    "artifact": {"type": "package-group", "ids": ["plasma-meta"]},
+                }],
+                "applications": [],
+                "components": [],
+                "operations": [],
+            }), encoding="utf-8")
+            receipt = self.receipt(["desktop-plasma"])
+            receipt["catalogSha256"] = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+            receipt["catalogRelease"] = "test"
+            receipt["satisfiedItems"] = ["desktop-plasma"]
+            receipt["pendingItems"] = []
+            receipt["installedItems"] = ["desktop-plasma"]
+            receipt["deferredItems"] = []
+            receipt["itemStatuses"] = [
+                {"id": "desktop-plasma", "status": "installed"}
+            ]
+            receipt["installedSelectedPackages"] = ["plasma-meta"]
+            receipt_path = root / "var/lib/linxira/installer-selection.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+            self.assertEqual(
+                linxiravalidate._selected_package_requirements(root), ["plasma-meta"]
+            )
+
+    def test_selected_package_validation_rejects_status_disagreement(self):
+        with tempfile.TemporaryDirectory() as temporary_root:
+            root = Path(temporary_root)
+            catalog_path = root / "usr/share/linxira/catalog/catalog-v3.json"
+            catalog_path.parent.mkdir(parents=True)
+            catalog_path.write_text(json.dumps({
+                "catalogVersion": 3,
+                "release": "test",
+                "desktops": [{
+                    "id": "desktop-plasma",
+                    "provider": "pacman",
+                    "source": "arch",
+                    "artifact": {"type": "package", "ids": ["plasma-meta"]},
+                }],
+            }), encoding="utf-8")
+            receipt = self.receipt(["desktop-plasma"])
+            receipt.update({
+                "catalogSha256": hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+                "satisfiedItems": ["desktop-plasma"],
+                "pendingItems": [],
+                "installedItems": [],
+                "deferredItems": [],
+                "itemStatuses": [{"id": "desktop-plasma", "status": "installed"}],
+                "installedSelectedPackages": ["plasma-meta"],
+            })
+            receipt_path = root / "var/lib/linxira/installer-selection.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "classifications disagree"):
+                linxiravalidate._selected_package_requirements(root)
+
+    def test_chromium_and_libreoffice_fresh_are_required_by_final_validation(self):
+        with tempfile.TemporaryDirectory() as temporary_root:
+            root = Path(temporary_root)
+            catalog_path = root / "usr/share/linxira/catalog/catalog-v3.json"
+            catalog_path.parent.mkdir(parents=True)
+            catalog_path.write_text(json.dumps({
+                "catalogVersion": 3,
+                "release": "test",
+                "desktops": [],
+                "applications": [
+                    {
+                        "id": "chromium",
+                        "provider": "pacman",
+                        "source": "arch",
+                        "artifact": {"type": "package", "ids": ["chromium"]},
+                    },
+                    {
+                        "id": "libreoffice-fresh",
+                        "provider": "pacman",
+                        "source": "arch",
+                        "artifact": {
+                            "type": "package",
+                            "ids": ["libreoffice-fresh"],
+                        },
+                    },
+                ],
+                "components": [],
+                "operations": [],
+            }), encoding="utf-8")
+            selected = ["chromium", "libreoffice-fresh"]
+            receipt = self.receipt(selected)
+            receipt.update({
+                "catalogSha256": hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+                "satisfiedItems": selected,
+                "pendingItems": [],
+                "installedItems": selected,
+                "deferredItems": [],
+                "itemStatuses": [
+                    {"id": leaf_id, "status": "installed"} for leaf_id in selected
+                ],
+                "installedSelectedPackages": ["chromium", "libreoffice-fresh"],
+            })
+            receipt["selectionDocument"]["selectedLeafIds"] = selected
+            receipt_path = root / "var/lib/linxira/installer-selection.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+            self.assertEqual(
+                linxiravalidate._selected_package_requirements(root),
+                ["chromium", "libreoffice-fresh"],
+            )
+
+    def test_package_group_is_satisfied_only_when_all_sync_group_members_are_installed(self):
+        group = types.SimpleNamespace(returncode=0, stdout="gcc\nmake\n")
+        with mock.patch.object(linxiravalidate, "_package_installed") as installed, mock.patch.object(
+            linxiravalidate.subprocess, "run", return_value=group
+        ):
+            installed.side_effect = lambda _root, package: package in {"gcc", "make"}
+            self.assertTrue(
+                linxiravalidate._package_or_group_installed("/target", "base-devel")
+            )
+            installed.side_effect = lambda _root, package: package == "gcc"
+            self.assertFalse(
+                linxiravalidate._package_or_group_installed("/target", "base-devel")
+            )
 
     def test_gnome_receipt_adds_session_portal_and_keyring_requirements(self):
         with tempfile.TemporaryDirectory() as temporary_root:

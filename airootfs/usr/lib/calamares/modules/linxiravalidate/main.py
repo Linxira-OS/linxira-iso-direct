@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import hashlib
 import json
 import re
 import subprocess
@@ -91,6 +92,84 @@ def _selection_requirements(root):
     return desktop, session, packages
 
 
+def _selected_package_requirements(root):
+    root_path = Path(root)
+    receipt_path = root_path / "var/lib/linxira/installer-selection.json"
+    receipt = json.loads(
+        receipt_path.read_text(encoding="utf-8"),
+        object_pairs_hook=_reject_duplicate_keys,
+    )
+    catalog_path = root_path / "usr/share/linxira/catalog/catalog-v3.json"
+    catalog_raw = catalog_path.read_bytes()
+    if hashlib.sha256(catalog_raw).hexdigest() != receipt.get("catalogSha256"):
+        raise ValueError("installed Catalog v3 digest does not match the installer receipt")
+    catalog = json.loads(catalog_raw, object_pairs_hook=_reject_duplicate_keys)
+    if catalog.get("catalogVersion") != 3 or catalog.get("release") != receipt.get("catalogRelease"):
+        raise ValueError("installed Catalog v3 identity does not match the installer receipt")
+
+    leaves = {
+        item["id"]: item
+        for section in ("desktops", "applications", "components", "operations")
+        for item in catalog.get(section, [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    selected = receipt.get("selectedLeafIds")
+    satisfied = receipt.get("satisfiedItems")
+    pending = receipt.get("pendingItems")
+    installed_items = receipt.get("installedItems")
+    deferred_items = receipt.get("deferredItems")
+    item_statuses = receipt.get("itemStatuses")
+    installed = receipt.get("installedSelectedPackages")
+    if not all(
+        isinstance(value, list)
+        for value in (
+            selected,
+            satisfied,
+            pending,
+            installed_items,
+            deferred_items,
+            item_statuses,
+            installed,
+        )
+    ):
+        raise ValueError("installer receipt package provenance is incomplete")
+    if any(len(set(value)) != len(value) for value in (selected, satisfied, pending)):
+        raise ValueError("installer receipt contains duplicate selection IDs")
+    if not set(satisfied).issubset(set(selected)) or not set(pending).issubset(set(selected)):
+        raise ValueError("installer receipt satisfied or pending items are not selected")
+    if set(satisfied) | set(pending) != set(selected) or set(satisfied) & set(pending):
+        raise ValueError("installer receipt does not classify every selected item")
+    if installed_items != satisfied or deferred_items != pending:
+        raise ValueError("installer receipt installed and deferred classifications disagree")
+    satisfied_set = set(satisfied)
+    expected_statuses = [
+        {
+            "id": leaf_id,
+            "status": "installed" if leaf_id in satisfied_set else "explicitly-deferred",
+        }
+        for leaf_id in selected
+    ]
+    if item_statuses != expected_statuses:
+        raise ValueError("installer receipt item statuses are inconsistent")
+
+    packages = set()
+    for leaf_id in satisfied:
+        leaf = leaves.get(leaf_id)
+        artifact = leaf.get("artifact", {}) if isinstance(leaf, dict) else {}
+        if (
+            not isinstance(leaf, dict)
+            or leaf.get("provider") != "pacman"
+            or leaf.get("source") != "arch"
+            or artifact.get("type") not in {"package", "package-group"}
+            or not isinstance(artifact.get("ids"), list)
+        ):
+            raise ValueError("satisfied item is not an Arch package leaf: " + str(leaf_id))
+        packages.update(artifact["ids"])
+    if any(not isinstance(package, str) for package in installed) or not set(installed).issubset(packages):
+        raise ValueError("installer receipt lists an unauthorized selected package")
+    return sorted(packages)
+
+
 def _package_installed(root, package):
     result = subprocess.run(
         ["arch-chroot", root, "pacman", "-Q", package],
@@ -99,6 +178,22 @@ def _package_installed(root, package):
         check=False,
     )
     return result.returncode == 0
+
+
+def _package_or_group_installed(root, target):
+    if _package_installed(root, target):
+        return True
+    result = subprocess.run(
+        ["arch-chroot", root, "pacman", "-Sgq", target],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        text=True,
+    )
+    members = tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+    return result.returncode == 0 and bool(members) and all(
+        _package_installed(root, member) for member in members
+    )
 
 
 def _package_version(root, package):
@@ -122,6 +217,7 @@ def run():
 
     try:
         desktop, selected_session, selected_packages = _selection_requirements(root)
+        selected_packages = tuple(selected_packages) + tuple(_selected_package_requirements(root))
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
         return "Installed system validation failed", "invalid installer selection receipt: " + str(error)
 
@@ -149,13 +245,16 @@ def run():
         "wireplumber",
         "xdg-desktop-portal",
         "xdg-desktop-portal-kde",
-    ) + selected_packages
+    )
     for package in required_packages:
         if not _package_installed(root, package):
             failures.append("missing package: " + package)
+    for package in selected_packages:
+        if not _package_or_group_installed(root, package):
+            failures.append("missing selected package or group: " + package)
     required_versions = {
         "linxira-chwd-detector": "0.1.0-1",
-        "linxira-components": "0.7.0-2",
+        "linxira-components": "0.7.0-3",
         "linxira-hardware-driver-manager": "0.4.0-1",
     }
     for package, version in required_versions.items():

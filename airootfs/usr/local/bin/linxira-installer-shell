@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+lock=/tmp/linxira-installer.lock
+exec 9>"$lock"
+if ! flock -n 9; then
+  printf 'Linxira installer is already running.\n'
+  exit 0
+fi
+
 log=/tmp/linxira-installer.log
 : >"$log"
 
@@ -10,6 +17,9 @@ status=$?
 set -e
 
 printf '\nCalamares exited with status %d.\n' "$status" >>"$log"
+if (( status == 87 )); then
+  printf 'Calamares is already running; only one installer instance is allowed.\n' >>"$log"
+fi
 if (( status != 0 )); then
   exec /usr/bin/konsole --fullscreen --hold -e /usr/bin/bash -c \
     'printf "Linxira installer stopped. Diagnostic log:\n\n"; cat /tmp/linxira-installer.log'

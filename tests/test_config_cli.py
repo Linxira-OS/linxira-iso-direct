@@ -8,9 +8,23 @@ CONFIG_CLI = PROFILE_ROOT.parent / "linxira-config-hub/cli/linxira-config"
 PACKAGE_CENTER = PROFILE_ROOT.parent / "linxira-package-center/src/linxira-package-center"
 COMPONENT_MANAGER = PROFILE_ROOT.parent / "linxira-component-manager/src/linxira_component_manager/backend.py"
 CATALOG = PROFILE_ROOT.parent / "linxira-catalog/catalog/catalog-v3.json"
+BUILD_SCRIPT = PROFILE_ROOT / "build-direct-iso.sh"
 
 
 class ConfigCliTests(unittest.TestCase):
+    def test_iso_artifact_gate_requires_application_metadata(self):
+        script = BUILD_SCRIPT.read_text(encoding="utf-8")
+        for path in (
+            "usr/share/metainfo/org.linxira.ComponentManager.metainfo.xml",
+            "usr/share/metainfo/org.linxira.Completion.metainfo.xml",
+            "usr/share/metainfo/org.linxira.PackageCenter.metainfo.xml",
+            "usr/share/metainfo/org.linxira.GamingManager.metainfo.xml",
+            "usr/share/metainfo/org.linxira.Update.metainfo.xml",
+            "usr/share/metainfo/org.linxira.Welcome.metainfo.xml",
+            "usr/share/applications/org.linxira.Completion.desktop",
+        ):
+            self.assertIn(path, script)
+
     def test_cli_consumes_catalog_v3(self):
         script = CONFIG_CLI.read_text(encoding="utf-8")
         self.assertIn("catalog-v3.json", script)
@@ -93,6 +107,11 @@ class ConfigCliTests(unittest.TestCase):
             build,
         )
         self.assertIn("usr/lib/calamares/modules/linxirasoftware/module.desc", build)
+
+    def test_build_rejects_unguarded_calamares_desktop_launcher(self):
+        build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
+        self.assertIn("usr/share/applications/calamares.desktop", build)
+        self.assertIn("unguarded duplicate installer launcher", build)
 
 
 if __name__ == "__main__":

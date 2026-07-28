@@ -205,6 +205,10 @@ validate_package_artifact "$shelly_package" shelly
 validate_package_artifact "$calamares_package" calamares \
   usr/lib/calamares/modules/linxirasoftware/libcalamares_viewmodule_linxirasoftware.so \
   usr/lib/calamares/modules/linxirasoftware/module.desc
+if bsdtar -tf "$calamares_package" | grep -Fxq 'usr/share/applications/calamares.desktop'; then
+  printf 'The Calamares artifact exposes an unguarded duplicate installer launcher.\n' >&2
+  exit 1
+fi
 validate_package_artifact "$artwork_package" linxira-artwork \
   usr/share/doc/linxira-artwork/TRADEMARKS.md
 validate_package_artifact "$catalog_package" linxira-catalog \
@@ -230,14 +234,17 @@ validate_package_artifact "$components_package" linxira-components \
   usr/share/dbus-1/system-services/org.linxira.Components1.service \
   usr/share/polkit-1/actions/org.linxira.components.policy \
   usr/share/licenses/linxira-components/LICENSE
-validate_package_version "$components_package" 0.7.0-2
+validate_package_version "$components_package" 0.7.0-3
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
+  usr/share/metainfo/org.linxira.ComponentManager.metainfo.xml \
   usr/share/licenses/linxira-component-manager/LICENSE
 validate_package_artifact "$completion_agent_package" linxira-completion-agent \
   usr/bin/linxira-completion-agent \
+  usr/share/applications/org.linxira.Completion.desktop \
   etc/xdg/autostart/org.linxira.Completion.desktop \
+  usr/share/metainfo/org.linxira.Completion.metainfo.xml \
   usr/share/licenses/linxira-completion-agent/LICENSE
 validate_package_artifact "$config_hub_package" linxira-config-hub \
   usr/bin/linxira-config \
@@ -245,11 +252,13 @@ validate_package_artifact "$config_hub_package" linxira-config-hub \
 validate_package_artifact "$package_center_package" linxira-package-center \
   usr/bin/linxira-package-center \
   usr/share/applications/org.linxira.PackageCenter.desktop \
+  usr/share/metainfo/org.linxira.PackageCenter.metainfo.xml \
   usr/share/linxira/package-center/VERSION \
   usr/share/licenses/linxira-package-center/LICENSE
 validate_package_artifact "$gaming_manager_package" linxira-gaming-manager \
   usr/bin/linxira-gaming-manager \
   usr/share/applications/org.linxira.GamingManager.desktop \
+  usr/share/metainfo/org.linxira.GamingManager.metainfo.xml \
   usr/share/licenses/linxira-gaming-manager/LICENSE
 validate_package_artifact "$chwd_detector_package" linxira-chwd-detector \
   usr/bin/linxira-chwd-detector \
@@ -271,10 +280,12 @@ validate_package_artifact "$update_package" linxira-update \
   usr/bin/linxira-update \
   etc/xdg/autostart/linxira-update-tray.desktop \
   usr/lib/systemd/user/linxira-update.timer \
+  usr/share/metainfo/org.linxira.Update.metainfo.xml \
   usr/share/licenses/linxira-update/LICENSE
 validate_package_artifact "$welcome_package" linxira-welcome \
   usr/bin/linxira-welcome \
   usr/share/applications/org.linxira.Welcome.desktop \
+  usr/share/metainfo/org.linxira.Welcome.metainfo.xml \
   etc/xdg/autostart/org.linxira.Welcome.desktop \
   usr/share/linxira/welcome/i18n/zh_CN.json \
   usr/share/licenses/linxira-welcome/LICENSE
