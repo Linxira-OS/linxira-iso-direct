@@ -155,9 +155,9 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("noSuspend=true", power_config)
         self.assertIn("lockBeforeTurnOff=0", power_config)
 
-    def test_offline_repository_uses_a_build_scoped_cache(self):
+    def test_offline_repository_uses_a_build_scoped_reusable_cache(self):
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('package_cache=$(mktemp -d "${build_parent}/.linxira-target-package-cache.XXXXXX")', script)
+        self.assertIn('package_cache="${build_parent}/.linxira-package-cache"', script)
         self.assertNotIn("LINXIRA_PACKAGE_CACHE", script)
 
     def test_failed_session_does_not_autologin_forever(self):
