@@ -18,7 +18,9 @@ CANDIDATES = PROFILE_ROOT / "offline-candidate-packages.x86_64"
 libcalamares = types.ModuleType("libcalamares")
 libcalamares.globalstorage = types.SimpleNamespace(value=lambda key: None)
 libcalamares.job = types.SimpleNamespace(configuration={}, setprogress=lambda value: None)
-libcalamares.utils = types.SimpleNamespace(debug=lambda value: None)
+libcalamares.utils = types.SimpleNamespace(
+    debug=lambda value: None, warning=lambda value: None
+)
 sys.modules["libcalamares"] = libcalamares
 spec = importlib.util.spec_from_file_location("linxirapacstrap", MODULE_PATH)
 linxirapacstrap = importlib.util.module_from_spec(spec)
@@ -142,15 +144,52 @@ class PacstrapSelectionTests(unittest.TestCase):
         }))
         self.assertEqual(result["onlinePackages"], ["chromium", "libreoffice-fresh"])
         self.assertEqual(result["pendingItems"], [])
+        self.assertIn("chromium", result["onlineSatisfiedLeafIds"])
+        self.assertEqual(
+            linxirapacstrap._online_sync_command("/target", 180),
+            [
+                "arch-chroot", "/target", "/usr/bin/timeout", "--foreground", "180",
+                "/usr/bin/pacman", "-Sy", "--noconfirm",
+            ],
+        )
         self.assertEqual(
             linxirapacstrap._online_install_command(
                 "/target", result["onlinePackages"], 600
             ),
             [
                 "arch-chroot", "/target", "/usr/bin/timeout", "--foreground", "600",
-                "/usr/bin/pacman", "-Sy", "--needed", "--noconfirm", "chromium",
+                "/usr/bin/pacman", "-S", "--needed", "--noconfirm", "chromium",
                 "libreoffice-fresh",
             ],
+        )
+
+    def test_defer_online_items_moves_online_leaves_to_pending(self):
+        result = {
+            "onlinePackages": ["chromium", "libreoffice-fresh"],
+            "onlineSatisfiedLeafIds": ["chromium", "libreoffice-fresh"],
+            "satisfiedItems": ["desktop-plasma", "chromium", "libreoffice-fresh"],
+            "pendingItems": ["component-cups"],
+        }
+        deferred = linxirapacstrap._defer_online_items(result)
+        self.assertEqual(deferred["satisfiedItems"], ["desktop-plasma"])
+        self.assertEqual(
+            deferred["pendingItems"],
+            ["chromium", "component-cups", "libreoffice-fresh"],
+        )
+        self.assertEqual(deferred["onlinePackages"], [])
+        self.assertEqual(result["satisfiedItems"], ["desktop-plasma", "chromium", "libreoffice-fresh"])
+
+    def test_defer_online_items_noop_without_online_leaves(self):
+        result = {
+            "onlinePackages": [],
+            "onlineSatisfiedLeafIds": [],
+            "satisfiedItems": ["desktop-plasma"],
+            "pendingItems": [],
+        }
+        self.assertIsNot(linxirapacstrap._defer_online_items(result), result)
+        self.assertEqual(
+            linxirapacstrap._defer_online_items(result)["satisfiedItems"],
+            ["desktop-plasma"],
         )
 
     def test_component_selection_has_catalog_root_provenance(self):
@@ -365,6 +404,119 @@ class PacstrapSelectionTests(unittest.TestCase):
             ):
                 linxirapacstrap._rank_target_mirrors(root, 120)
             self.assertEqual(mirrorlist.read_text(encoding="utf-8"), original)
+
+    def _fake_mirror_connect(self, host_port, timeout):
+        host, _port = host_port
+        if host.startswith("bad"):
+            raise OSError("connection refused")
+        return mock.MagicMock()
+
+    def test_mirror_filter_keeps_only_reachable_servers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirrorlist = root / "etc/pacman.d/mirrorlist"
+            mirrorlist.parent.mkdir(parents=True)
+            mirrorlist.write_text(
+                "Server = https://bad1.example/$repo/os/$arch\n"
+                "Server = https://good.example/$repo/os/$arch\n"
+                "Server = https://bad2.example/$repo/os/$arch\n",
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                linxirapacstrap.socket,
+                "create_connection",
+                side_effect=self._fake_mirror_connect,
+            ):
+                count = linxirapacstrap._filter_reachable_mirrors(root, 5)
+            self.assertEqual(count, 1)
+            self.assertEqual(
+                mirrorlist.read_text(encoding="utf-8"),
+                "Server = https://good.example/$repo/os/$arch\n",
+            )
+
+    def test_mirror_filter_all_unreachable_keeps_original_list(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirrorlist = root / "etc/pacman.d/mirrorlist"
+            mirrorlist.parent.mkdir(parents=True)
+            original = "Server = https://bad.example/$repo/os/$arch\n"
+            mirrorlist.write_text(original, encoding="utf-8")
+            with mock.patch.object(
+                linxirapacstrap.socket,
+                "create_connection",
+                side_effect=self._fake_mirror_connect,
+            ):
+                count = linxirapacstrap._filter_reachable_mirrors(root, 5)
+            self.assertEqual(count, 0)
+            self.assertEqual(mirrorlist.read_text(encoding="utf-8"), original)
+
+    def test_mirror_filter_all_reachable_keeps_list_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirrorlist = root / "etc/pacman.d/mirrorlist"
+            mirrorlist.parent.mkdir(parents=True)
+            original = (
+                "Server = https://good1.example/$repo/os/$arch\n"
+                "Server = https://good2.example/$repo/os/$arch\n"
+            )
+            mirrorlist.write_text(original, encoding="utf-8")
+            with mock.patch.object(
+                linxirapacstrap.socket,
+                "create_connection",
+                side_effect=self._fake_mirror_connect,
+            ):
+                count = linxirapacstrap._filter_reachable_mirrors(root, 5)
+            self.assertEqual(count, 2)
+            self.assertEqual(mirrorlist.read_text(encoding="utf-8"), original)
+
+    def test_run_defers_online_packages_when_database_sync_fails(self):
+        result = {
+            "selectionDocument": {"selectedLeafIds": ["desktop-plasma", "chromium"]},
+            "selectedPackages": [],
+            "onlinePackages": ["chromium"],
+            "onlineSatisfiedLeafIds": ["chromium"],
+            "satisfiedItems": ["desktop-plasma", "chromium"],
+            "pendingItems": [],
+            "catalogSha256": self.digest,
+            "catalogRelease": self.catalog["release"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pacman_conf = root / "pacman.conf"
+            pacman_conf.write_text("[options]\n", encoding="utf-8")
+            repository = root / "repo"
+            repository.mkdir()
+            config = {
+                "pacmanConfig": str(pacman_conf),
+                "repositoryPath": str(repository),
+                "packageManifest": str(BASELINE),
+                "candidateManifest": str(CANDIDATES),
+            }
+            with mock.patch.object(linxirapacstrap.os.path, "ismount", return_value=True), \
+                 mock.patch.object(linxirapacstrap, "_catalog_selection", return_value=result), \
+                 mock.patch.object(linxirapacstrap, "_pacstrap_commands", return_value=[]), \
+                 mock.patch.object(linxirapacstrap, "_enable_target_multilib"), \
+                 mock.patch.object(linxirapacstrap, "_rank_target_mirrors"), \
+                 mock.patch.object(linxirapacstrap, "_filter_reachable_mirrors", return_value=1), \
+                 mock.patch.object(linxirapacstrap, "_validate_online_target"), \
+                 mock.patch.object(
+                     linxirapacstrap, "_online_sync_command", return_value=["pacman", "-Sy"]
+                 ), \
+                 mock.patch.object(
+                     linxirapacstrap, "_run_with_retries", return_value="sync timed out"
+                 ), \
+                 mock.patch.object(linxirapacstrap, "_write_receipt") as receipt:
+                libcalamares.job.configuration = config
+                libcalamares.globalstorage.value = lambda key: (
+                    str(root) if key == "rootMountPoint" else None
+                )
+                error = linxirapacstrap.run()
+            self.assertIsNone(error)
+            deferred = receipt.call_args.args[1]
+            self.assertIn("chromium", deferred["pendingItems"])
+            self.assertNotIn("chromium", deferred["satisfiedItems"])
+            self.assertEqual(deferred["onlinePackages"], [])
+            self.assertEqual(receipt.call_args.args[3], [])
 
     def test_retry_error_contains_each_exit_and_command_output(self):
         with mock.patch.object(linxirapacstrap, "_run", side_effect=[1, 2]), mock.patch.object(

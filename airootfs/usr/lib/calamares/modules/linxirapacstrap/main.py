@@ -6,9 +6,11 @@ import os
 from pathlib import Path
 import queue
 import re
+import socket
 import subprocess
 import threading
 import time
+from urllib.parse import urlsplit
 
 import libcalamares
 
@@ -528,6 +530,7 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
     offline_packages = []
     online_package_set = set()
     online_packages = []
+    online_satisfied = []
     satisfied = []
     pending = []
     pending_set = set()
@@ -576,6 +579,7 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
                     online_package_set.add(target)
                     online_packages.append(target)
             satisfied.append(leaf_id)
+            online_satisfied.append(leaf_id)
         else:
             pending.append(leaf_id)
             pending_set.add(leaf_id)
@@ -584,6 +588,7 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
         "selectionDocument": selection,
         "selectedPackages": offline_packages,
         "onlinePackages": online_packages,
+        "onlineSatisfiedLeafIds": online_satisfied,
         "satisfiedItems": satisfied,
         "pendingItems": pending,
         "catalogSha256": digest,
@@ -659,7 +664,7 @@ def _pacstrap_commands(pacman_config, root, baseline_packages, selected_packages
     return commands
 
 
-def _online_install_command(root, packages, timeout_seconds):
+def _online_sync_command(root, timeout_seconds):
     return [
         "arch-chroot",
         root,
@@ -668,6 +673,19 @@ def _online_install_command(root, packages, timeout_seconds):
         str(timeout_seconds),
         "/usr/bin/pacman",
         "-Sy",
+        "--noconfirm",
+    ]
+
+
+def _online_install_command(root, packages, timeout_seconds):
+    return [
+        "arch-chroot",
+        root,
+        "/usr/bin/timeout",
+        "--foreground",
+        str(timeout_seconds),
+        "/usr/bin/pacman",
+        "-S",
         "--needed",
         "--noconfirm",
         *packages,
@@ -728,6 +746,62 @@ def _rank_target_mirrors(root, timeout_seconds):
     libcalamares.utils.debug("linxirapacstrap: target mirrorlist ranked with reflector")
 
 
+def _reachable_mirror_servers(mirrorlist_text, connect_timeout=8, maximum=8):
+    servers = re.findall(r"(?m)^\s*Server\s*=\s*(\S+)", mirrorlist_text)
+    reachable = []
+    for server in servers:
+        parts = urlsplit(server)
+        host = parts.hostname
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        if not host:
+            continue
+        try:
+            with socket.create_connection((host, port), timeout=connect_timeout):
+                pass
+            reachable.append(server)
+        except OSError:
+            libcalamares.utils.debug("linxirapacstrap: mirror unreachable: " + server)
+        if len(reachable) >= maximum:
+            break
+    return reachable
+
+
+def _filter_reachable_mirrors(root, connect_timeout=8, maximum=8):
+    mirrorlist = Path(root) / "etc/pacman.d/mirrorlist"
+    original = mirrorlist.read_bytes()
+    text = original.decode("utf-8", errors="replace")
+    servers = re.findall(r"(?m)^\s*Server\s*=\s*(\S+)", text)
+    if not servers:
+        return 0
+    reachable = _reachable_mirror_servers(text, connect_timeout, maximum)
+    if not reachable:
+        libcalamares.utils.debug("linxirapacstrap: no reachable mirror; leaving the list untouched")
+        return 0
+    if len(reachable) == len(servers):
+        return len(reachable)
+    mirrorlist.write_text(
+        "\n".join("Server = " + server for server in reachable) + "\n",
+        encoding="utf-8",
+    )
+    libcalamares.utils.debug(
+        "linxirapacstrap: filtered mirrorlist to %d reachable server(s)" % len(reachable)
+    )
+    return len(reachable)
+
+
+def _defer_online_items(result):
+    result = dict(result)
+    deferred = set(result.get("onlineSatisfiedLeafIds", []))
+    if not deferred:
+        return result
+    result["satisfiedItems"] = [
+        item for item in result["satisfiedItems"] if item not in deferred
+    ]
+    result["pendingItems"] = sorted(set(result["pendingItems"]) | deferred)
+    result["onlinePackages"] = []
+    return result
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -768,6 +842,17 @@ def run():
         online_transaction_attempts = config.get("onlineTransactionAttempts", 1)
         if type(online_transaction_attempts) is not int or not 1 <= online_transaction_attempts <= 2:
             raise ValueError("onlineTransactionAttempts must be an integer from 1 through 2")
+        online_sync_timeout = config.get("onlineSyncTimeoutSeconds", 180)
+        if type(online_sync_timeout) is not int or not 60 <= online_sync_timeout <= 600:
+            raise ValueError("onlineSyncTimeoutSeconds must be an integer from 60 through 600")
+        online_sync_attempts = config.get("onlineSyncAttempts", 2)
+        if type(online_sync_attempts) is not int or not 1 <= online_sync_attempts <= 3:
+            raise ValueError("onlineSyncAttempts must be an integer from 1 through 3")
+        online_connect_timeout = config.get("onlineConnectTimeoutSeconds", 8)
+        if type(online_connect_timeout) is not int or not 2 <= online_connect_timeout <= 30:
+            raise ValueError(
+                "onlineConnectTimeoutSeconds must be an integer from 2 through 30"
+            )
     except (OSError, TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError) as error:
         return "Software selection is invalid", str(error)
 
@@ -788,18 +873,50 @@ def run():
 
     if result["onlinePackages"]:
         _rank_target_mirrors(root, mirror_rank_timeout)
-        _validate_online_target(root)
-        command = _online_install_command(
-            root, result["onlinePackages"], online_transaction_timeout
-        )
-        error = _run_with_retries(
-            command,
-            "target official repository package installation",
-            online_transaction_attempts,
-            timeout_seconds=online_transaction_timeout,
-        )
-        if error:
-            return "Online package installation failed", error
+        reachable = _filter_reachable_mirrors(root, online_connect_timeout)
+        if not reachable:
+            libcalamares.utils.warning(
+                "linxirapacstrap: no reachable official mirror; deferring online packages"
+            )
+            result = _defer_online_items(result)
+        else:
+            try:
+                _validate_online_target(root)
+            except (OSError, ValueError) as error:
+                libcalamares.utils.warning(
+                    "linxirapacstrap: online target validation failed; deferring online packages: "
+                    + str(error)
+                )
+                result = _defer_online_items(result)
+            else:
+                sync_error = _run_with_retries(
+                    _online_sync_command(root, online_sync_timeout),
+                    "official repository database synchronization",
+                    online_sync_attempts,
+                    timeout_seconds=online_sync_timeout,
+                )
+                if sync_error:
+                    libcalamares.utils.warning(
+                        "linxirapacstrap: database synchronization failed; deferring online packages: "
+                        + sync_error
+                    )
+                    result = _defer_online_items(result)
+                else:
+                    command = _online_install_command(
+                        root, result["onlinePackages"], online_transaction_timeout
+                    )
+                    error = _run_with_retries(
+                        command,
+                        "target official repository package installation",
+                        online_transaction_attempts,
+                        timeout_seconds=online_transaction_timeout,
+                    )
+                    if error:
+                        libcalamares.utils.warning(
+                            "linxirapacstrap: online package installation failed; deferring online packages: "
+                            + error
+                        )
+                        result = _defer_online_items(result)
 
     try:
         _write_receipt(
