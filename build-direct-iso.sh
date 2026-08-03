@@ -308,7 +308,10 @@ pacman_db=''
 package_cache=''
 
 cleanup() {
-  rm -rf "$profile_copy" "$work_dir" "$pacman_db" "$package_cache" 2>/dev/null || true
+  # The reusable package cache is intentionally kept across builds so reruns
+  # do not re-download the ~2.1G target package set (pacman reuses cached
+  # files). Only transient dirs are removed.
+  rm -rf "$profile_copy" "$work_dir" "$pacman_db" 2>/dev/null || true
 }
 trap cleanup EXIT
 
