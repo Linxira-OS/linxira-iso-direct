@@ -255,7 +255,7 @@ def run():
     required_versions = {
         "linxira-chwd-detector": "0.1.0-1",
         "linxira-components": "0.7.0-3",
-        "linxira-hardware-driver-manager": "0.4.0-1",
+        "linxira-hardware-driver-manager": "0.4.0-2",
     }
     for package, version in required_versions.items():
         installed = _package_version(root, package)

@@ -57,7 +57,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
             '"/usr/bin/linxira-components-service"',
             '"/usr/lib/systemd/system/linxira-components.service"',
             '"linxira-components": "0.7.0-3"',
-            '"linxira-hardware-driver-manager": "0.4.0-1"',
+            '"linxira-hardware-driver-manager": "0.4.0-2"',
             '"/usr/bin/linxira-components-worker"',
             '"/usr/lib/systemd/system/linxira-components-worker@.service"',
             '"/usr/bin/linxira-update"',

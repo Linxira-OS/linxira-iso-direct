@@ -129,7 +129,7 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["pendingItems"], [])
         self.assertIn("chromium", result["satisfiedItems"])
 
-    def test_chromium_and_libreoffice_fresh_share_full_upgrade_transaction(self):
+    def test_chromium_and_libreoffice_fresh_share_online_install_transaction(self):
         office = next(
             item
             for item in self.catalog["applications"]
@@ -143,12 +143,12 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["onlinePackages"], ["chromium", "libreoffice-fresh"])
         self.assertEqual(result["pendingItems"], [])
         self.assertEqual(
-            linxirapacstrap._online_upgrade_command(
+            linxirapacstrap._online_install_command(
                 "/target", result["onlinePackages"], 600
             ),
             [
                 "arch-chroot", "/target", "/usr/bin/timeout", "--foreground", "600",
-                "/usr/bin/pacman", "-Syyu", "--needed", "--noconfirm", "chromium",
+                "/usr/bin/pacman", "-Sy", "--needed", "--noconfirm", "chromium",
                 "libreoffice-fresh",
             ],
         )
@@ -372,7 +372,7 @@ class PacstrapSelectionTests(unittest.TestCase):
         ):
             linxirapacstrap._run.last_output = "mirror timeout"
             error = linxirapacstrap._run_with_retries(
-                ["arch-chroot", "/target", "/usr/bin/pacman", "-Syyu"],
+                ["arch-chroot", "/target", "/usr/bin/pacman", "-Sy"],
                 "target transaction",
                 attempts=2,
             )

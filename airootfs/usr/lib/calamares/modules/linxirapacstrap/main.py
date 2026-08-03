@@ -659,7 +659,7 @@ def _pacstrap_commands(pacman_config, root, baseline_packages, selected_packages
     return commands
 
 
-def _online_upgrade_command(root, packages, timeout_seconds):
+def _online_install_command(root, packages, timeout_seconds):
     return [
         "arch-chroot",
         root,
@@ -667,7 +667,7 @@ def _online_upgrade_command(root, packages, timeout_seconds):
         "--foreground",
         str(timeout_seconds),
         "/usr/bin/pacman",
-        "-Syyu",
+        "-Sy",
         "--needed",
         "--noconfirm",
         *packages,
@@ -789,12 +789,12 @@ def run():
     if result["onlinePackages"]:
         _rank_target_mirrors(root, mirror_rank_timeout)
         _validate_online_target(root)
-        command = _online_upgrade_command(
+        command = _online_install_command(
             root, result["onlinePackages"], online_transaction_timeout
         )
         error = _run_with_retries(
             command,
-            "target official repository full-upgrade transaction",
+            "target official repository package installation",
             online_transaction_attempts,
             timeout_seconds=online_transaction_timeout,
         )
