@@ -387,7 +387,10 @@ sed -i 's/\r$//' "$theme_target/linxira.plymouth"
 
 mapfile -t target_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$target_manifest")
 mapfile -t candidate_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$candidate_manifest")
-target_packages+=("${candidate_packages[@]}")
+# 镜像瘦身: candidate(GNOME 11 包)不再进离线仓库, 改由安装器在线拉取
+# 产品决策: offlineDesktopClosure=["plasma"] + gnomeCandidatePolicy=online-only
+# 收益: GNOME 依赖闭包(~1G, 含 webkitgtk)不再进 ISO → 4.6G → ~3.5G
+# target_packages+=("${candidate_packages[@]}")
 target_packages+=(amd-ucode intel-ucode)
 # Resolve Arch virtual providers without making the ISO build interactive.
 target_packages+=(pipewire-jack qt6-multimedia-ffmpeg mkinitcpio tesseract-data-eng)

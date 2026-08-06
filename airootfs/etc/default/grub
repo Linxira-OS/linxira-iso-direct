@@ -1,0 +1,11 @@
+# Linxira OS: GRUB 双内核平铺菜单 (参照 CachyOS grubcfg.conf)
+# 解决"开机界面不能选择 linux / linux-lts"问题
+GRUB_TIMEOUT=5
+# 关键: 不折叠子菜单, 所有内核平铺显示 (linux + linux-lts 直接可选)
+GRUB_DISABLE_SUBMENU=false
+# 默认启动项: 主内核 linux (滚动更新内核, lts 作兜底)
+GRUB_TOP_LEVEL=/boot/vmlinuz-linux
+# 支持多系统探测 (Windows 双系统等)
+GRUB_DISABLE_OS_PROBER=false
+GRUB_DISABLE_RECOVERY=true
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash nowatchdog nvme_load=YES"
