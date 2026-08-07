@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import queue
 import re
+import shutil
 import socket
 import subprocess
 import threading
@@ -701,6 +702,11 @@ def _validate_online_target(root):
     mirrorlist = mirrorlist_path.read_text(encoding="utf-8")
     if "linxira-offline" in config:
         raise ValueError("target pacman configuration retains the offline repository")
+    # Offline package source is only needed during installation. Remove it from
+    # the installed system so users do not carry ~2.2G of redundant .zst files.
+    offline_dir = root_path / "opt/linxira/offline-repo"
+    if offline_dir.is_dir():
+        shutil.rmtree(offline_dir, ignore_errors=True)
     for repository in ("core", "extra"):
         if not re.search(rf"(?m)^\[{re.escape(repository)}\]\s*$", config):
             raise ValueError("target pacman configuration is missing official repository: " + repository)
