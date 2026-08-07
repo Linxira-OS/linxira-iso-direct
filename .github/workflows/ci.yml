@@ -23,6 +23,22 @@ jobs:
         with:
           repository: Linxira-OS/linxira-package-center
           path: linxira-package-center
+      - uses: actions/checkout@v4
+        with:
+          repository: Linxira-OS/linxira-component-manager
+          path: linxira-component-manager
+      - uses: actions/checkout@v4
+        with:
+          repository: Linxira-OS/linxira-config-hub
+          path: linxira-config-hub
+      - uses: actions/checkout@v4
+        with:
+          repository: Linxira-OS/linxira-welcome
+          path: linxira-welcome
+      - uses: actions/checkout@v4
+        with:
+          repository: Linxira-OS/linxira-artwork
+          path: linxira-artwork
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
