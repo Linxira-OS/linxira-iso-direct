@@ -94,3 +94,70 @@ bash scripts/validate-calamares-config.sh \
   /path/to/linxira-artwork-1.0.3-4-any.pkg.tar.zst \
   /path/to/rootless-arch-root
 ```
+
+---
+
+## Build philosophy (构建思路)
+
+1. **Fully offline installable.** The ISO embeds the exact target package
+   closure (808 packages, ~2.2 GB) under `/opt/linxira/offline-repo`. Pacstrap
+   installs the complete system from this local file:// repository, so a user
+   with no network can install a full, standard, usable system. This is the
+   core differentiator vs. CachyOS (which fetches desktop packages online).
+2. **Dual-kernel fallback.** `linux` (rolling) + `linux-lts` (fallback) + both
+   headers are always installed (same strategy as CachyOS). GRUB shows both
+   flat (`GRUB_DISABLE_SUBMENU=false`), so a broken rolling kernel can be
+   escaped at boot.
+3. **Size policy.** Under 5 GB is acceptable (Windows ISOs are ~4.7 GB). The
+   installed-system payload itself is ~2.1 GB (xz-compressed SquashFS) —
+   smaller than Linux Mint. The remaining ~2.2 GB is the offline package
+   source: a feature (offline install), not waste. Do not shrink by dropping
+   offline capability.
+4. **Keep what keeps the system usable.** Firmware (amdgpu/intel/realtek/...),
+   CJK fonts, and runtime libraries stay in the image. GNOME candidates were
+   moved online-only to save ~1 GB.
+
+## Build pipeline (构建逻辑)
+
+```
+1. Download target closure (804-808 packages) from CN mirror (aliyun)
+   → build-scoped cache  .linxira-package-cache
+2. Link all cached .pkg.tar.zst into the profile's offline-repo
+   → airootfs/opt/linxira/offline-repo  (repo-add: linxira-offline.db)
+3. pacstrap (at install time, from Live ISO):
+   linxira-pacman.conf ([linxira-offline] file:///opt/linxira/offline-repo)
+   → installs baseline + selected packages fully offline
+4. mkarchiso → SquashFS (xz, high compression) → xorriso -s 5G → ISO
+5. Post-install: target is validated to drop the offline repository
+   reference (pacman.conf) — TODO: also delete /opt/linxira/offline-repo
+   directory from the installed system (~2.2 GB reclaimed)
+```
+
+Build-machine requirements (documented so rebuilds don't regress):
+- `/etc/pacman.d/mirrorlist` → `https://mirrors.aliyun.com/archlinux/$repo/os/$arch`
+  (geo.pkgbuild.com times out for large packages from CN networks)
+- `/usr/bin/mkarchiso`: xorriso invocation needs `-s 5G` in the *native*
+  argument zone (`xorriso "${xorriso_options[@]}" -s 5G -as mkisofs`); the
+  mkisofs-compat zone rejects `-s`
+- `pacman.conf` in this repo pins `SigLevel = Never` for the build
+  environment (committed; no manual patching needed)
+
+## Image requirements (镜像要求)
+
+- **Size**: target 2.5-4.3 GB. Current 4.3 GB = 2.1 GB system + 2.2 GB
+  offline source. Under 5 GB is fine; never trade away offline install.
+- **Offline closure completeness**: every dependency of the target closure
+  must be in offline-repo, otherwise offline install fails (the offline
+  pacman.conf has no network fallback).
+- **Kernels**: `linux` + `linux-lts` + both `-headers` (dual-kernel fallback).
+- **Retained** (product decisions): firmware family, CJK fonts, runtime libs,
+  language packs.
+- **Online-only**: GNOME candidates (`offline-candidate-packages.x86_64`),
+  143 of 191 catalog items (`offlinePolicy: online-only`). Only 3 items are
+  `included` (firefox, vpn-baseline, desktop-plasma) and install offline.
+- **Signature**: release images must carry packages signed by the Linxira key
+  (currently `release@linxira.org`); the build-only repos accept unsigned
+  development packages.
+- **Catalog pairing**: catalog package version must match what the installer
+  reads (`catalog-v3.json`); bump `pkgrel` when catalog content changes.
+
