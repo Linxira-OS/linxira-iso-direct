@@ -694,6 +694,23 @@ def _enable_target_multilib(root):
         raise ValueError("target pacman configuration has no recognized multilib section")
 
 
+def _enable_target_linxira_repo(root):
+    """Append the signed [linxira] repository so installed Linxira packages
+    remain tracked by linxira-update after first boot. Idempotent."""
+    config_path = Path(root) / "etc/pacman.conf"
+    contents = config_path.read_text(encoding="utf-8")
+    if re.search(r"(?m)^\[linxira\]\s*$", contents):
+        return
+    section = (
+        "[linxira]\n"
+        "SigLevel = Required DatabaseOptional\n"
+        "Server = https://linxira-packages.github.io/packages/$arch"
+    )
+    if not contents.endswith("\n"):
+        contents += "\n"
+    config_path.write_text(contents + "\n" + section + "\n", encoding="utf-8")
+
+
 def _pacstrap_command(pacman_config, root, packages):
     return [
         "pacstrap",
@@ -919,6 +936,7 @@ def run():
 
     try:
         _enable_target_multilib(root)
+        _enable_target_linxira_repo(root)
         if result["onlinePackages"]:
             _validate_online_target(root)
     except (OSError, ValueError) as error:

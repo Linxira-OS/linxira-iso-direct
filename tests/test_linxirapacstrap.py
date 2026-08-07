@@ -367,6 +367,22 @@ class PacstrapSelectionTests(unittest.TestCase):
             )
             self.assertFalse(queue_path.exists())
 
+    def test_target_linxira_repo_is_appended_idempotently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "etc/pacman.conf"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                "[options]\nArchitecture = auto\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n",
+                encoding="utf-8",
+            )
+            linxirapacstrap._enable_target_linxira_repo(Path(directory))
+            contents = config.read_text(encoding="utf-8")
+            self.assertIn("[linxira]", contents)
+            self.assertIn("SigLevel = Required DatabaseOptional", contents)
+            self.assertIn("https://linxira-packages.github.io/packages/$arch", contents)
+            linxirapacstrap._enable_target_linxira_repo(Path(directory))
+            self.assertEqual(contents.count("[linxira]"), config.read_text(encoding="utf-8").count("[linxira]"))
+
     def test_target_multilib_is_enabled_idempotently(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "etc/pacman.conf"
@@ -531,6 +547,7 @@ class PacstrapSelectionTests(unittest.TestCase):
                  mock.patch.object(linxirapacstrap, "_catalog_selection", return_value=result), \
                  mock.patch.object(linxirapacstrap, "_pacstrap_commands", return_value=[]), \
                  mock.patch.object(linxirapacstrap, "_enable_target_multilib"), \
+                 mock.patch.object(linxirapacstrap, "_enable_target_linxira_repo"), \
                  mock.patch.object(linxirapacstrap, "_rank_target_mirrors"), \
                  mock.patch.object(linxirapacstrap, "_filter_reachable_mirrors", return_value=1), \
                  mock.patch.object(linxirapacstrap, "_validate_online_target"), \

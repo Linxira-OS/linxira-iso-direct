@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --chwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --chwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -21,6 +21,7 @@ hardware_driver_manager_package=''
 recovery_diagnostics_package=''
 update_package=''
 welcome_package=''
+keyring_package=''
 plymouth_theme_directory=''
 output_dir="${profile_dir}/out"
 
@@ -101,6 +102,11 @@ while [[ $# -gt 0 ]]; do
       welcome_package=$2
       shift 2
       ;;
+    --keyring-package)
+      [[ $# -ge 2 ]] || usage
+      keyring_package=$2
+      shift 2
+      ;;
     --plymouth-theme-directory)
       [[ $# -ge 2 ]] || usage
       plymouth_theme_directory=$2
@@ -137,6 +143,7 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
        -z "$recovery_diagnostics_package" || ! -f "$recovery_diagnostics_package" ||
       -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
+      -z "$keyring_package" || ! -f "$keyring_package" ||
       -z "$plymouth_theme_directory" ||
       ! -f "$plymouth_theme_directory/linxira.plymouth" ||
       ! -f "$plymouth_theme_directory/watermark.png" ||
@@ -200,6 +207,7 @@ hardware_driver_manager_package=$(realpath "$hardware_driver_manager_package")
 recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
+keyring_package=$(realpath "$keyring_package")
 plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
 validate_package_artifact "$shelly_package" shelly
 validate_package_artifact "$calamares_package" calamares \
@@ -289,6 +297,9 @@ validate_package_artifact "$welcome_package" linxira-welcome \
   etc/xdg/autostart/org.linxira.Welcome.desktop \
   usr/share/linxira/welcome/i18n/zh_CN.json \
   usr/share/licenses/linxira-welcome/LICENSE
+validate_package_artifact "$keyring_package" linxira-keyring \
+  usr/share/keyrings/linxira.gpg \
+  usr/share/keyrings/linxira-release-fingerprint
 if ! bsdtar -tf "$artwork_package" | grep -qx 'usr/share/doc/linxira-artwork/TRADEMARKS.md'; then
   printf 'The artwork artifact does not contain the Linxira brand policy.\n' >&2
   exit 1
@@ -355,6 +366,7 @@ package_artifacts=(
   "$recovery_diagnostics_package"
   "$update_package"
   "$welcome_package"
+  "$keyring_package"
 )
 repo_artifacts=()
 for artifact in "${package_artifacts[@]}"; do

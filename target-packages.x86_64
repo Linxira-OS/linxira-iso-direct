@@ -36,6 +36,7 @@ linxira-components
 linxira-config-hub
 linxira-gaming-manager
 linxira-hardware-driver-manager
+linxira-keyring
 linxira-recovery-diagnostics
 linxira-package-center
 linxira-update
