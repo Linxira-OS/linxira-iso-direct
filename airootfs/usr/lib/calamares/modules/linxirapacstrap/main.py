@@ -26,6 +26,7 @@ INPUT_FIELDS = {
     "selectedBundleIds",
 }
 SELECTION_SCHEMA = "org.linxira.component-selection.v1"
+PENDING_INSTALL_SCHEMA = "org.linxira.pending-install.v1"
 STABLE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 PROVENANCE = {"required", "recommended", "optional", "user"}
 
@@ -634,6 +635,52 @@ def _write_receipt(root, result, baseline_packages, selected_packages):
     temporary.replace(receipt_path)
 
 
+def _write_pending_install(root, result, catalog_path):
+    """Publish a first-boot install queue for online packages deferred at
+    install time. The queue is removed when no online packages were deferred,
+    so welcome can detect a non-empty file and offer to continue the install."""
+    pending = []
+    if not result.get("onlinePackages"):
+        pending = sorted(result.get("onlineSatisfiedLeafIds", []))
+    queue_path = Path(root) / "var/lib/linxira/pending-install.json"
+    if not pending:
+        queue_path.unlink(missing_ok=True)
+        return
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    catalog = _strict_json(Path(catalog_path).read_bytes())
+    leaves = {
+        item["id"]: item
+        for section in ("desktops", "applications", "components")
+        for item in catalog.get(section, [])
+    }
+    entries = []
+    for leaf_id in pending:
+        leaf = leaves.get(leaf_id)
+        if not isinstance(leaf, dict):
+            continue
+        availability = leaf.get("availability", {})
+        artifact = leaf.get("artifact", {})
+        entries.append(
+            {
+                "leafId": leaf_id,
+                "name": leaf.get("name", {}),
+                "offlinePolicy": availability.get("offlinePolicy"),
+                "packages": artifact.get("ids", []),
+            }
+        )
+    payload = {
+        "schemaVersion": PENDING_INSTALL_SCHEMA,
+        "pending": entries,
+        "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    temporary = queue_path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(queue_path)
+
+
 def _enable_target_multilib(root):
     config_path = Path(root) / "etc/pacman.conf"
     contents = config_path.read_text(encoding="utf-8")
@@ -933,6 +980,11 @@ def run():
         )
     except OSError as error:
         return "Target configuration could not be finalized", str(error)
+
+    try:
+        _write_pending_install(root, result, config.get("catalogPath"))
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        return "Pending install queue could not be finalized", str(error)
 
     libcalamares.job.setprogress(1.0)
     return None
