@@ -411,6 +411,10 @@ package_cache="${build_parent}/.linxira-package-cache"
 mkdir -p "$package_cache"
 pacman_db=$(mktemp -d "${build_parent}/.linxira-pacman-db.XXXXXX")
 mkdir -p "$offline_repo" "${pacman_db}/local"
+echo "=== DEBUG pacman.conf ===" >&2
+cat "${profile_copy}/pacman.conf" >&2
+echo "=== DEBUG linxira-local repo ===" >&2
+ls -la "${profile_copy}/linxira-local-repo/x86_64/" 2>&1 | head -8 >&2
 printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox \
   --config "${profile_copy}/pacman.conf" \
   --dbpath "$pacman_db" \
