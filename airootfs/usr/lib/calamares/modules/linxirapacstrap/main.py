@@ -26,6 +26,7 @@ INPUT_FIELDS = {
     "selectedBundleIds",
 }
 SELECTION_SCHEMA = "org.linxira.component-selection.v1"
+PENDING_INSTALL_SCHEMA = "org.linxira.pending-install.v1"
 STABLE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 PROVENANCE = {"required", "recommended", "optional", "user"}
 
@@ -634,6 +635,52 @@ def _write_receipt(root, result, baseline_packages, selected_packages):
     temporary.replace(receipt_path)
 
 
+def _write_pending_install(root, result, catalog_path):
+    """Publish a first-boot install queue for online packages deferred at
+    install time. The queue is removed when no online packages were deferred,
+    so welcome can detect a non-empty file and offer to continue the install."""
+    pending = []
+    if not result.get("onlinePackages"):
+        pending = sorted(result.get("onlineSatisfiedLeafIds", []))
+    queue_path = Path(root) / "var/lib/linxira/pending-install.json"
+    if not pending:
+        queue_path.unlink(missing_ok=True)
+        return
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    catalog = _strict_json(Path(catalog_path).read_bytes())
+    leaves = {
+        item["id"]: item
+        for section in ("desktops", "applications", "components")
+        for item in catalog.get(section, [])
+    }
+    entries = []
+    for leaf_id in pending:
+        leaf = leaves.get(leaf_id)
+        if not isinstance(leaf, dict):
+            continue
+        availability = leaf.get("availability", {})
+        artifact = leaf.get("artifact", {})
+        entries.append(
+            {
+                "leafId": leaf_id,
+                "name": leaf.get("name", {}),
+                "offlinePolicy": availability.get("offlinePolicy"),
+                "packages": artifact.get("ids", []),
+            }
+        )
+    payload = {
+        "schemaVersion": PENDING_INSTALL_SCHEMA,
+        "pending": entries,
+        "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    temporary = queue_path.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(queue_path)
+
+
 def _enable_target_multilib(root):
     config_path = Path(root) / "etc/pacman.conf"
     contents = config_path.read_text(encoding="utf-8")
@@ -657,7 +704,7 @@ def _enable_target_linxira_repo(root):
     section = (
         "[linxira]\n"
         "SigLevel = Required DatabaseOptional\n"
-        "Server = https://linxira-os.github.io/linxira-packages/$arch"
+        "Server = https://linxira-packages.github.io/packages/$arch"
     )
     if not contents.endswith("\n"):
         contents += "\n"
@@ -812,6 +859,19 @@ def _filter_reachable_mirrors(root, connect_timeout=8, maximum=8):
     return len(reachable)
 
 
+def _defer_online_items(result):
+    result = dict(result)
+    deferred = set(result.get("onlineSatisfiedLeafIds", []))
+    if not deferred:
+        return result
+    result["satisfiedItems"] = [
+        item for item in result["satisfiedItems"] if item not in deferred
+    ]
+    result["pendingItems"] = sorted(set(result["pendingItems"]) | deferred)
+    result["onlinePackages"] = []
+    return result
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -887,18 +947,18 @@ def run():
         reachable = _filter_reachable_mirrors(root, online_connect_timeout)
         if not reachable:
             libcalamares.utils.warning(
-                "linxirapacstrap: no reachable official mirror; skipping online packages"
+                "linxirapacstrap: no reachable official mirror; deferring online packages"
             )
-            result["onlinePackages"] = []
+            result = _defer_online_items(result)
         else:
             try:
                 _validate_online_target(root)
             except (OSError, ValueError) as error:
                 libcalamares.utils.warning(
-                    "linxirapacstrap: online target validation failed; skipping online packages: "
+                    "linxirapacstrap: online target validation failed; deferring online packages: "
                     + str(error)
                 )
-                result["onlinePackages"] = []
+                result = _defer_online_items(result)
             else:
                 sync_error = _run_with_retries(
                     _online_sync_command(root, online_sync_timeout),
@@ -908,10 +968,10 @@ def run():
                 )
                 if sync_error:
                     libcalamares.utils.warning(
-                        "linxirapacstrap: database synchronization failed; skipping online packages: "
+                        "linxirapacstrap: database synchronization failed; deferring online packages: "
                         + sync_error
                     )
-                    result["onlinePackages"] = []
+                    result = _defer_online_items(result)
                 else:
                     command = _online_install_command(
                         root, result["onlinePackages"], online_transaction_timeout
@@ -924,10 +984,10 @@ def run():
                     )
                     if error:
                         libcalamares.utils.warning(
-                            "linxirapacstrap: online package installation failed; skipping online packages: "
+                            "linxirapacstrap: online package installation failed; deferring online packages: "
                             + error
                         )
-                        result["onlinePackages"] = []
+                        result = _defer_online_items(result)
 
     try:
         _write_receipt(
@@ -938,6 +998,11 @@ def run():
         )
     except OSError as error:
         return "Target configuration could not be finalized", str(error)
+
+    try:
+        _write_pending_install(root, result, config.get("catalogPath"))
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        return "Pending install queue could not be finalized", str(error)
 
     libcalamares.job.setprogress(1.0)
     return None

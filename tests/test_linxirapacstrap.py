@@ -163,6 +163,35 @@ class PacstrapSelectionTests(unittest.TestCase):
             ],
         )
 
+    def test_defer_online_items_moves_online_leaves_to_pending(self):
+        result = {
+            "onlinePackages": ["chromium", "libreoffice-fresh"],
+            "onlineSatisfiedLeafIds": ["chromium", "libreoffice-fresh"],
+            "satisfiedItems": ["desktop-plasma", "chromium", "libreoffice-fresh"],
+            "pendingItems": ["component-cups"],
+        }
+        deferred = linxirapacstrap._defer_online_items(result)
+        self.assertEqual(deferred["satisfiedItems"], ["desktop-plasma"])
+        self.assertEqual(
+            deferred["pendingItems"],
+            ["chromium", "component-cups", "libreoffice-fresh"],
+        )
+        self.assertEqual(deferred["onlinePackages"], [])
+        self.assertEqual(result["satisfiedItems"], ["desktop-plasma", "chromium", "libreoffice-fresh"])
+
+    def test_defer_online_items_noop_without_online_leaves(self):
+        result = {
+            "onlinePackages": [],
+            "onlineSatisfiedLeafIds": [],
+            "satisfiedItems": ["desktop-plasma"],
+            "pendingItems": [],
+        }
+        self.assertIsNot(linxirapacstrap._defer_online_items(result), result)
+        self.assertEqual(
+            linxirapacstrap._defer_online_items(result)["satisfiedItems"],
+            ["desktop-plasma"],
+        )
+
     def test_component_selection_has_catalog_root_provenance(self):
         selection = self.selection({
             "component-cups": "cap-system/component-cups",
@@ -303,6 +332,41 @@ class PacstrapSelectionTests(unittest.TestCase):
             }],
         )
 
+    def test_pending_install_queue_written_when_online_deferred(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = {
+                "onlinePackages": [],
+                "onlineSatisfiedLeafIds": ["code", "chromium"],
+                "pendingItems": ["code", "chromium"],
+            }
+            linxirapacstrap._write_pending_install(
+                Path(directory), result, str(CATALOG_PATH)
+            )
+            queue_path = Path(directory) / "var/lib/linxira/pending-install.json"
+            self.assertTrue(queue_path.is_file())
+            payload = json.loads(queue_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["schemaVersion"], "org.linxira.pending-install.v1")
+            leaf_ids = [entry["leafId"] for entry in payload["pending"]]
+            self.assertEqual(leaf_ids, ["chromium", "code"])
+            entry = payload["pending"][0]
+            self.assertEqual(entry["offlinePolicy"], "online-only")
+            self.assertIsInstance(entry["name"], dict)
+            self.assertIsInstance(entry["packages"], list)
+
+    def test_pending_install_queue_removed_when_no_deferral(self):
+        with tempfile.TemporaryDirectory() as directory:
+            queue_path = Path(directory) / "var/lib/linxira/pending-install.json"
+            queue_path.parent.mkdir(parents=True)
+            queue_path.write_text('{"stale": true}\n', encoding="utf-8")
+            result = {
+                "onlinePackages": ["code"],
+                "onlineSatisfiedLeafIds": ["code"],
+            }
+            linxirapacstrap._write_pending_install(
+                Path(directory), result, str(CATALOG_PATH)
+            )
+            self.assertFalse(queue_path.exists())
+
     def test_target_linxira_repo_is_appended_idempotently(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "etc/pacman.conf"
@@ -315,7 +379,7 @@ class PacstrapSelectionTests(unittest.TestCase):
             contents = config.read_text(encoding="utf-8")
             self.assertIn("[linxira]", contents)
             self.assertIn("SigLevel = Required DatabaseOptional", contents)
-            self.assertIn("https://linxira-os.github.io/linxira-packages/$arch", contents)
+            self.assertIn("https://linxira-packages.github.io/packages/$arch", contents)
             linxirapacstrap._enable_target_linxira_repo(Path(directory))
             self.assertEqual(contents.count("[linxira]"), config.read_text(encoding="utf-8").count("[linxira]"))
 
@@ -493,7 +557,8 @@ class PacstrapSelectionTests(unittest.TestCase):
                  mock.patch.object(
                      linxirapacstrap, "_run_with_retries", return_value="sync timed out"
                  ), \
-                 mock.patch.object(linxirapacstrap, "_write_receipt") as receipt:
+                 mock.patch.object(linxirapacstrap, "_write_receipt") as receipt, \
+                 mock.patch.object(linxirapacstrap, "_write_pending_install") as pending:
                 libcalamares.job.configuration = config
                 libcalamares.globalstorage.value = lambda key: (
                     str(root) if key == "rootMountPoint" else None
@@ -501,9 +566,11 @@ class PacstrapSelectionTests(unittest.TestCase):
                 error = linxirapacstrap.run()
             self.assertIsNone(error)
             deferred = receipt.call_args.args[1]
-            self.assertIn("chromium", deferred["satisfiedItems"])
+            self.assertIn("chromium", deferred["pendingItems"])
+            self.assertNotIn("chromium", deferred["satisfiedItems"])
             self.assertEqual(deferred["onlinePackages"], [])
             self.assertEqual(receipt.call_args.args[3], [])
+            pending.assert_called_once()
 
     def test_retry_error_contains_each_exit_and_command_output(self):
         with mock.patch.object(linxirapacstrap, "_run", side_effect=[1, 2]), mock.patch.object(
