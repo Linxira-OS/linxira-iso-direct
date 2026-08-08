@@ -379,7 +379,7 @@ class PacstrapSelectionTests(unittest.TestCase):
             contents = config.read_text(encoding="utf-8")
             self.assertIn("[linxira]", contents)
             self.assertIn("SigLevel = Required DatabaseOptional", contents)
-            self.assertIn("https://linxira-packages.github.io/packages/$arch", contents)
+            self.assertIn("https://linxira-os.github.io/linxira-packages/$arch", contents)
             linxirapacstrap._enable_target_linxira_repo(Path(directory))
             self.assertEqual(contents.count("[linxira]"), config.read_text(encoding="utf-8").count("[linxira]"))
 

@@ -704,7 +704,7 @@ def _enable_target_linxira_repo(root):
     section = (
         "[linxira]\n"
         "SigLevel = Required DatabaseOptional\n"
-        "Server = https://linxira-packages.github.io/packages/$arch"
+        "Server = https://linxira-os.github.io/linxira-packages/$arch"
     )
     if not contents.endswith("\n"):
         contents += "\n"
@@ -947,7 +947,7 @@ def run():
         reachable = _filter_reachable_mirrors(root, online_connect_timeout)
         if not reachable:
             libcalamares.utils.warning(
-                "linxirapacstrap: no reachable official mirror; deferring online packages"
+                "linxirapacstrap: no reachable official mirror; skipping online packages (will offer completion after first boot)"
             )
             result = _defer_online_items(result)
         else:
@@ -955,7 +955,7 @@ def run():
                 _validate_online_target(root)
             except (OSError, ValueError) as error:
                 libcalamares.utils.warning(
-                    "linxirapacstrap: online target validation failed; deferring online packages: "
+                    "linxirapacstrap: online target validation failed; skipping online packages: "
                     + str(error)
                 )
                 result = _defer_online_items(result)
@@ -968,7 +968,7 @@ def run():
                 )
                 if sync_error:
                     libcalamares.utils.warning(
-                        "linxirapacstrap: database synchronization failed; deferring online packages: "
+                        "linxirapacstrap: database synchronization failed; skipping online packages: "
                         + sync_error
                     )
                     result = _defer_online_items(result)
@@ -984,7 +984,7 @@ def run():
                     )
                     if error:
                         libcalamares.utils.warning(
-                            "linxirapacstrap: online package installation failed; deferring online packages: "
+                            "linxirapacstrap: online package installation failed; skipping online packages: "
                             + error
                         )
                         result = _defer_online_items(result)
