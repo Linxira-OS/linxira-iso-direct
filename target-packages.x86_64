@@ -70,3 +70,4 @@ xdg-desktop-portal-kde
 
 # ZRAM compressed swap (内存优化)
 zram-generator
+syslinux
