@@ -72,11 +72,20 @@ class CatalogTests(unittest.TestCase):
         )
 
     def test_offline_candidates_are_separate_and_exactly_gnome(self):
+        # 2026-08-09 产品决策: 多桌面支持(6 桌面全 reviewed, 对标 CachyOS);
+        # gnome 不再是唯一 offline 候选。此处改为校验多桌面结构一致性。
         baseline = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
-        candidates = CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
-        gnome = next(item for item in self.catalog["desktops"] if item["id"] == "desktop-gnome")
-        self.assertEqual(candidates, gnome["artifact"]["ids"])
-        self.assertTrue(set(candidates).isdisjoint(baseline))
+        desktops = self.catalog["desktops"]
+        self.assertEqual(
+            [d["id"] for d in desktops],
+            ["desktop-plasma", "desktop-gnome", "desktop-xfce",
+             "desktop-hyprland", "desktop-sway", "desktop-cosmic"],
+        )
+        for desktop in desktops:
+            self.assertEqual(desktop["review"]["status"], "reviewed")
+        plasma = next(d for d in desktops if d["id"] == "desktop-plasma")
+        self.assertEqual(plasma["availability"]["offlinePolicy"], "included")
+        self.assertIn("plasma-desktop", baseline)
 
         build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
         self.assertIn('target_packages+=("${candidate_packages[@]}")', build)
@@ -102,7 +111,8 @@ class CatalogTests(unittest.TestCase):
             if item["presentation"]["defaultSelected"]
         ]
         chromium = next(item for item in self.catalog["applications"] if item["id"] == "chromium")
-        self.assertEqual(selected, ["firefox"])
+        # timeshift 是系统恢复标配(2026-08-09 产品决策), 默认选中
+        self.assertEqual(sorted(selected), ["firefox", "timeshift"])
         self.assertTrue(chromium["presentation"]["recommended"])
         self.assertFalse(chromium["presentation"]["defaultSelected"])
         self.assertIn("firefox", packages)

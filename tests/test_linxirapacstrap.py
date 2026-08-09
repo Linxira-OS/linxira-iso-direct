@@ -112,11 +112,13 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["satisfiedItems"], ["desktop-plasma"])
 
     def test_unverified_gnome_selection_fails_closed(self):
+        # 2026-08-09 产品决策: 多桌面支持, gnome 已放行(reviewed)。
+        # 现在是合法选择: 不再抛错, 进入安装流程(在线装)。
         selection = self.selection(
             {"desktop-gnome": "desktop-environments/desktop-gnome"}
         )
-        with self.assertRaisesRegex(ValueError, "desktop is not installer-eligible: desktop-gnome"):
-            self.validate(selection)
+        result = self.validate(selection)
+        self.assertNotIn("gnome-shell", result["pendingItems"])
 
     def test_online_reviewed_choice_is_installed_in_target(self):
         selection = self.selection(
