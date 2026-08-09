@@ -225,7 +225,6 @@ def run():
         "shelly",
         "linux",
         "linux-lts",
-        "grub",
         "sddm",
         "linxira-artwork",
         "linxira-catalog",
@@ -246,6 +245,11 @@ def run():
         "xdg-desktop-portal",
         "xdg-desktop-portal-kde",
     )
+    # 引导程序按用户选择校验(grub/systemd-boot/refind), 不再硬编码 grub
+    bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
+    bootloader_package = {"grub": "grub", "systemd-boot": "systemd-boot", "refind": "refind"}.get(bootloader)
+    if bootloader_package:
+        required_packages = required_packages + (bootloader_package,)
     for package in required_packages:
         if not _package_installed(root, package):
             failures.append("missing package: " + package)
@@ -267,7 +271,6 @@ def run():
         failures.append("unsupported display manager installed: gdm")
 
     required_paths = (
-        "/boot/grub/grub.cfg",
         "/boot/initramfs-linux.img",
         "/boot/initramfs-linux-lts.img",
         "/boot/vmlinuz-linux",
@@ -309,6 +312,14 @@ def run():
         "/usr/share/wayland-sessions/plasma.desktop",
         "/usr/share/wayland-sessions/" + selected_session,
     )
+    # 引导相关路径按所选引导校验
+    bootloader_paths = {
+        "grub": ("/boot/grub/grub.cfg",),
+        "systemd-boot": ("/boot/loader/loader.conf",),
+        "refind": ("/boot/EFI/refind/refind.conf",),
+    }
+    for path in bootloader_paths.get(bootloader, bootloader_paths["grub"]):
+        required_paths = required_paths + (path,)
     for path in required_paths:
         target_path = _target_path(root, path)
         if not os.path.isfile(target_path):
