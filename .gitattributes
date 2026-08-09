@@ -1,3 +1,5 @@
+# 默认所有文本文件 LF(autocrlf=true 的 git archive 会把未标记文件转 CRLF, 破坏 Linux 配置)
+* text=auto eol=lf
 # 强制 LF 行尾：Windows 编辑不会破坏 Linux 构建脚本/配置文件
 *.sh     text eol=lf
 *.py     text eol=lf
