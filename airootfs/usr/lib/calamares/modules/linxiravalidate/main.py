@@ -257,7 +257,7 @@ def run():
         if not _package_or_group_installed(root, package):
             failures.append("missing selected package or group: " + package)
     required_versions = {
-        "linxira-chwd-detector": "0.1.0-1",
+        "linxira-chwd-detector": "1.23.0-1",
         "linxira-components": "0.7.0-4",
         "linxira-hardware-driver-manager": "0.4.0-2",
     }
