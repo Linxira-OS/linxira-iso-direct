@@ -421,7 +421,7 @@ printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox
 
 mapfile -t cached_packages < <(find "$package_cache" -maxdepth 1 -type f -name '*.pkg.tar.zst' -print)
 for package in "${cached_packages[@]}"; do
-  ln "$package" "${offline_repo}/$(basename "$package")"
+  ln "$package" "${offline_repo}/$(basename "$package")" 2>/dev/null     || cp "$package" "${offline_repo}/$(basename "$package")"
 done
 mapfile -t offline_packages < <(find "$offline_repo" -maxdepth 1 -type f -name '*.pkg.tar.zst' -print)
 if [[ ${#offline_packages[@]} -eq 0 ]]; then
