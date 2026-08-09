@@ -272,7 +272,7 @@ validate_package_artifact "$chwd_detector_package" linxira-chwd-detector \
   usr/bin/linxira-chwd-detector \
   usr/share/doc/linxira-chwd-detector/UPSTREAM.md \
   usr/share/licenses/linxira-chwd-detector/LICENSE
-validate_package_version "$chwd_detector_package" 0.1.0-1
+validate_package_version "$chwd_detector_package" 1.23.0-1
 validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-driver-manager \
   usr/bin/linxira-hardware-driver-manager \
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
