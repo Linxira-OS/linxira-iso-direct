@@ -25,6 +25,7 @@ BOOT_CONFIGS = (
 )
 LIVE_PACKAGES = PROFILE_ROOT / "packages.x86_64"
 TARGET_PACKAGES = PROFILE_ROOT / "target-packages.x86_64"
+CANDIDATE_PACKAGES = PROFILE_ROOT / "offline-candidate-packages.x86_64"
 PACMAN_CONFIG = PROFILE_ROOT / "pacman.conf"
 INSTALLER_METAINFO = (
     PROFILE_ROOT / "airootfs/usr/share/metainfo/org.linxira.Installer.metainfo.xml"
@@ -51,11 +52,16 @@ class LiveSessionTests(unittest.TestCase):
     def test_media_and_vpn_apps_follow_the_preinstall_policy(self):
         live_packages = set(LIVE_PACKAGES.read_text(encoding="utf-8").splitlines())
         target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        candidate_packages = set(
+            CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
+        )
         self.assertTrue({"openconnect", "stoken", "haruna"}.isdisjoint(live_packages))
         self.assertTrue({"pptpclient", "vpnc"}.isdisjoint(live_packages))
         self.assertTrue({"networkmanager-openvpn", "wireguard-tools"}.issubset(live_packages))
         self.assertTrue({"networkmanager-openvpn", "wireguard-tools"}.issubset(target_packages))
-        self.assertIn("gwenview", target_packages)
+        # 2026-08-12 产品决策: KDE 生态应用随 Plasma 桌面走 offline-candidate, 不再进无条件 baseline
+        self.assertNotIn("gwenview", target_packages)
+        self.assertIn("gwenview", candidate_packages)
         self.assertTrue({"haruna", "vlc"}.isdisjoint(target_packages))
         mimeapps = (PROFILE_ROOT / "airootfs/etc/xdg/mimeapps.list").read_text(encoding="utf-8")
         self.assertNotIn("haruna", mimeapps.lower())

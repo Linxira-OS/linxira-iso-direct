@@ -60,11 +60,17 @@ class CatalogTests(unittest.TestCase):
             'catalogPath: "/usr/share/linxira/catalog/catalog-v3.json"',
         )
 
-    def test_installer_uses_fixed_plasma_and_v3_post_install_surfaces(self):
+    def test_installer_uses_candidate_plasma_and_v3_post_install_surfaces(self):
+        # 2026-08-12 产品决策: 桌面包从无条件 baseline 拆出, 改为 catalog 选择驱动。
+        # Plasma(Xfce) 进入 offline-candidate, 选谁装谁; baseline 不再强制装 KDE。
         packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        candidates = set(
+            CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
+        )
+        self.assertNotIn("plasma-desktop", packages)
+        self.assertIn("plasma-desktop", candidates)
         self.assertTrue(
             {
-                "plasma-desktop",
                 "linxira-catalog",
                 "linxira-package-center",
                 "linxira-component-manager",
@@ -75,17 +81,25 @@ class CatalogTests(unittest.TestCase):
         # 2026-08-09 产品决策: 多桌面支持(6 桌面全 reviewed, 对标 CachyOS);
         # gnome 不再是唯一 offline 候选。此处改为校验多桌面结构一致性。
         baseline = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        candidate_packages = set(
+            CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
+        )
         desktops = self.catalog["desktops"]
         self.assertEqual(
             [d["id"] for d in desktops],
             ["desktop-plasma", "desktop-gnome", "desktop-xfce",
-             "desktop-hyprland", "desktop-sway", "desktop-cosmic"],
+             "desktop-hyprland", "desktop-sway", "desktop-cosmic",
+             "desktop-cinnamon"],
         )
         for desktop in desktops:
             self.assertEqual(desktop["review"]["status"], "reviewed")
         plasma = next(d for d in desktops if d["id"] == "desktop-plasma")
         self.assertEqual(plasma["availability"]["offlinePolicy"], "included")
-        self.assertIn("plasma-desktop", baseline)
+        self.assertIn("plasma-desktop", candidate_packages)
+        # 2026-08-12 产品决策: Xfce 作为最稳定的离线回退桌面, 也随镜像附带
+        xfce = next(d for d in desktops if d["id"] == "desktop-xfce")
+        self.assertEqual(xfce["availability"]["offlinePolicy"], "included")
+        self.assertIn("xfce4", candidate_packages)
 
         build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
         self.assertIn('target_packages+=("${candidate_packages[@]}")', build)

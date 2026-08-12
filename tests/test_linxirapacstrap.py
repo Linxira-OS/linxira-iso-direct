@@ -34,6 +34,16 @@ class PacstrapSelectionTests(unittest.TestCase):
         cls.digest = hashlib.sha256(CATALOG_PATH.read_bytes()).hexdigest()
         cls.baseline = linxirapacstrap._manifest(BASELINE)
         cls.candidates = linxirapacstrap._manifest(CANDIDATES)
+        cls.base_set = set(cls.baseline)
+        # 2026-08-12 产品决策: Plasma 桌面包自 baseline 拆出, 常驻 offline-candidate。
+        # 默认桌面 Plasma 的离线包 = catalog 中 Plasma artifact 里不在 baseline 的部分。
+        catalog = cls.catalog
+        plasma_ids = next(
+            d["artifact"]["ids"]
+            for d in catalog["desktops"]
+            if d["id"] == "desktop-plasma"
+        )
+        cls.plasma_packages = [p for p in plasma_ids if p not in cls.base_set]
         cls.config = {"catalogPath": str(CATALOG_PATH), "selectionKey": "selection"}
         cls.leaves = {
             item["id"]: item
@@ -106,9 +116,11 @@ class PacstrapSelectionTests(unittest.TestCase):
         )
         self.assertNotIn("-M", commands[0])
 
-    def test_plasma_default_is_satisfied_without_candidate_additions(self):
+    def test_plasma_default_is_offline_included_from_candidates(self):
+        # 2026-08-12 产品决策: Plasma 从无条件 baseline 拆出, 桌面改由 catalog 选择驱动。
+        # 默认桌面 Plasma 通过 offline-candidate 清单随镜像附带, 无网也能装。
         result = self.validate(self.selection())
-        self.assertEqual(result["selectedPackages"], [])
+        self.assertEqual(result["selectedPackages"], self.plasma_packages)
         self.assertEqual(result["satisfiedItems"], ["desktop-plasma"])
 
     def test_unverified_gnome_selection_fails_closed(self):
@@ -128,7 +140,7 @@ class PacstrapSelectionTests(unittest.TestCase):
             }
         )
         result = self.validate(selection)
-        self.assertEqual(result["selectedPackages"], [])
+        self.assertEqual(result["selectedPackages"], self.plasma_packages)
         self.assertEqual(result["onlinePackages"], ["chromium"])
         self.assertEqual(result["pendingItems"], [])
         self.assertIn("chromium", result["satisfiedItems"])
@@ -276,7 +288,7 @@ class PacstrapSelectionTests(unittest.TestCase):
         )
         result = self.validate(selection)
         self.assertIn("wps-office", result["pendingItems"])
-        self.assertEqual(result["selectedPackages"], [])
+        self.assertEqual(result["selectedPackages"], self.plasma_packages)
 
     def test_unknown_fields_cannot_inject_packages(self):
         selection = self.selection()
@@ -314,7 +326,10 @@ class PacstrapSelectionTests(unittest.TestCase):
                 )
             )
         self.assertEqual(receipt["installedBaselinePackages"], self.baseline)
-        self.assertEqual(receipt["installedSelectedPackages"], [])
+        self.assertEqual(
+            sorted(receipt["installedSelectedPackages"]),
+            sorted(self.plasma_packages),
+        )
         self.assertEqual(receipt["installedItems"], ["desktop-plasma"])
         self.assertEqual(receipt["deferredItems"], [])
         self.assertEqual(

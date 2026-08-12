@@ -1,11 +1,31 @@
+# 离线候选桌面包 —— 随 ISO 附带, 供安装器在离线时选择安装。
+# 2026-08-12 产品决策: 桌面包从无条件 baseline 拆出, 改为 catalog 选择驱动。
+# Plasma(默认)与 Xfce(最稳定离线回退)进离线仓库候选, 选谁装谁; 换桌面时不再强制装 KDE。
+ark
+bluedevil
+dolphin
+gwenview
+kate
+kdialog
+kinfocenter
+kscreen
+konsole
+okular
+plasma-desktop
+plasma-nm
+plasma-pa
+plasma-systemmonitor
+polkit-kde-agent
+sddm
+spectacle
+systemsettings
+xfce4
+xfce4-goodies
+xfce4-terminal
+thunar
+lightdm
+lightdm-gtk-greeter
+blueman
 file-roller
-gnome-control-center
-gnome-disk-utility
-gnome-keyring
-gnome-session
-gnome-shell
-gnome-terminal
-gst-plugin-pipewire
-nautilus
-xdg-desktop-portal-gnome
-xdg-desktop-portal-gtk
+galculator
+gvfs
