@@ -303,8 +303,6 @@ def run():
         "/etc/xdg/autostart/org.linxira.Completion.desktop",
         "/etc/xdg/autostart/linxira-update-tray.desktop",
         "/usr/lib/systemd/user/linxira-update.timer",
-        "/usr/share/linxira/catalog/catalog-v2.json",
-        "/usr/share/linxira/catalog/catalog-v2.schema.json",
         "/usr/share/linxira/catalog/catalog-v3.json",
         "/usr/share/linxira/catalog/catalog-v3.schema.json",
         "/usr/share/linxira/welcome/i18n/zh_CN.json",

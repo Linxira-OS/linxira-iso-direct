@@ -220,8 +220,6 @@ fi
 validate_package_artifact "$artwork_package" linxira-artwork \
   usr/share/doc/linxira-artwork/TRADEMARKS.md
 validate_package_artifact "$catalog_package" linxira-catalog \
-  usr/share/linxira/catalog/catalog-v2.json \
-  usr/share/linxira/catalog/catalog-v2.schema.json \
   usr/share/linxira/catalog/catalog-v3.json \
   usr/share/linxira/catalog/catalog-v3.schema.json \
   usr/share/licenses/linxira-catalog/LICENSE

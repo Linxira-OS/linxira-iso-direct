@@ -737,7 +737,7 @@ def _online_sync_command(root, timeout_seconds):
         "--foreground",
         str(timeout_seconds),
         "/usr/bin/pacman",
-        "-Sy",
+        "-Syyu",
         "--noconfirm",
     ]
 
@@ -912,7 +912,7 @@ def run():
         online_transaction_attempts = config.get("onlineTransactionAttempts", 1)
         if type(online_transaction_attempts) is not int or not 1 <= online_transaction_attempts <= 2:
             raise ValueError("onlineTransactionAttempts must be an integer from 1 through 2")
-        online_sync_timeout = config.get("onlineSyncTimeoutSeconds", 180)
+        online_sync_timeout = config.get("onlineSyncTimeoutSeconds", 300)
         if type(online_sync_timeout) is not int or not 60 <= online_sync_timeout <= 600:
             raise ValueError("onlineSyncTimeoutSeconds must be an integer from 60 through 600")
         online_sync_attempts = config.get("onlineSyncAttempts", 2)
@@ -936,7 +936,6 @@ def run():
 
     try:
         _enable_target_multilib(root)
-        _enable_target_linxira_repo(root)
         if result["onlinePackages"]:
             _validate_online_target(root)
     except (OSError, ValueError) as error:
@@ -988,6 +987,14 @@ def run():
                             + error
                         )
                         result = _defer_online_items(result)
+
+    # 在线事务只在官方 core/extra/multilib 上进行, 排除官方 [linxira] 仓库,
+    # 避免安装期 sync 依赖 linxira-os.github.io 的可达性. 事务完成后才写入
+    # [linxira], 供首启后的 linxira-update 跟踪自建包.
+    try:
+        _enable_target_linxira_repo(root)
+    except (OSError, ValueError) as error:
+        return "Target configuration could not be finalized", str(error)
 
     try:
         _write_receipt(

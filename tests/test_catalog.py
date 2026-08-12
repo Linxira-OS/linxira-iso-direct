@@ -92,7 +92,7 @@ class CatalogTests(unittest.TestCase):
         pacstrap = (LOCAL_MODULES_PATH / "linxirapacstrap/main.py").read_text(encoding="utf-8")
         self.assertIn("def _pacstrap_commands", pacstrap)
         self.assertIn("for command in _pacstrap_commands(", pacstrap)
-        self.assertIn('"-Sy"', pacstrap)
+        self.assertIn('"-Syyu"', pacstrap)
         self.assertIn('"arch-chroot"', pacstrap)
         self.assertNotIn('selection["directPackageTargets"]', pacstrap)
 

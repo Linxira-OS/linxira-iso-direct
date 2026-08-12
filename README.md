@@ -12,28 +12,37 @@ the default desktop in both environments.
 Fresh Shelly profiles leave AUR, Flatpak, AppImage, and background tray checks
 disabled. Enabling background checks does not enable or query another source.
 
-Build with a verified local package artifact:
+Build with a verified local package artifact (or fetch them reproducibly from the
+official [linxira] repository first — see below):
 
 ```bash
+./scripts/fetch-linxira-packages.sh --output ./.linxira-packages
 ./build-direct-iso.sh \
-  --shelly-package /path/to/shelly-2.4.1.4-1-x86_64.pkg.tar.zst \
-  --calamares-package /path/to/calamares-3.3.14-9-x86_64.pkg.tar.zst \
-  --artwork-package /path/to/linxira-artwork-1.0.3-4-any.pkg.tar.zst \
-  --catalog-package /path/to/linxira-catalog-3.0.0-5-any.pkg.tar.zst \
-  --components-package /path/to/linxira-components-0.7.0-3-any.pkg.tar.zst \
-  --component-manager-package /path/to/linxira-component-manager-0.1.0-4-any.pkg.tar.zst \
-  --completion-agent-package /path/to/linxira-completion-agent-0.1.1-2-any.pkg.tar.zst \
-  --gaming-manager-package /path/to/linxira-gaming-manager-0.3.0-2-any.pkg.tar.zst \
-  --chwd-detector-package /path/to/linxira-chwd-detector-0.1.0-1-x86_64.pkg.tar.zst \
-  --hardware-driver-manager-package /path/to/linxira-hardware-driver-manager-0.4.0-2-any.pkg.tar.zst \
-  --recovery-diagnostics-package /path/to/linxira-recovery-diagnostics-0.2.0-2-any.pkg.tar.zst \
-  --update-package /path/to/linxira-update-0.1.0-3-any.pkg.tar.zst \
-  --config-hub-package /path/to/linxira-config-hub-2.2.1-1-any.pkg.tar.zst \
-  --package-center-package /path/to/linxira-package-center-0.2.1-2-any.pkg.tar.zst \
-  --welcome-package /path/to/linxira-welcome-1.0.0-9-any.pkg.tar.zst \
-  --plymouth-theme-directory /path/to/linxira-plymouth-theme \
+  --shelly-package ./.linxira-packages/shelly-*.pkg.tar.zst \
+  --calamares-package ./.linxira-packages/calamares-*.pkg.tar.zst \
+  --artwork-package ./.linxira-packages/linxira-artwork-*.pkg.tar.zst \
+  --catalog-package ./.linxira-packages/linxira-catalog-*.pkg.tar.zst \
+  --components-package ./.linxira-packages/linxira-components-*.pkg.tar.zst \
+  --component-manager-package ./.linxira-packages/linxira-component-manager-*.pkg.tar.zst \
+  --completion-agent-package ./.linxira-packages/linxira-completion-agent-*.pkg.tar.zst \
+  --gaming-manager-package ./.linxira-packages/linxira-gaming-manager-*.pkg.tar.zst \
+  --chwd-detector-package ./.linxira-packages/linxira-chwd-detector-*.pkg.tar.zst \
+  --hardware-driver-manager-package ./.linxira-packages/linxira-hardware-driver-manager-*.pkg.tar.zst \
+  --recovery-diagnostics-package ./.linxira-packages/linxira-recovery-diagnostics-*.pkg.tar.zst \
+  --update-package ./.linxira-packages/linxira-update-*.pkg.tar.zst \
+  --config-hub-package ./.linxira-packages/linxira-config-hub-*.pkg.tar.zst \
+  --package-center-package ./.linxira-packages/linxira-package-center-*.pkg.tar.zst \
+  --welcome-package ./.linxira-packages/linxira-welcome-*.pkg.tar.zst \
+  --keyring-package ./.linxira-packages/linxira-keyring-*.pkg.tar.zst \
+  --plymouth-theme-directory ./linxira-plymouth-theme \
   --output ./out
 ```
+
+`scripts/fetch-linxira-packages.sh` downloads the full self-built package closure
+(16 packages) from the official `https://linxira-os.github.io/linxira-packages/x86_64`
+repository, so the official build is reproducible from released artifacts. Local
+`.pkg.tar.zst` paths remain supported for third-party packages that were cached
+locally; Linxira self-built packages should normally come from the official repo.
 
 The wrapper validates each package identity and critical archive path, then
 copies the profile to a temporary directory and creates two repositories.
@@ -65,9 +74,14 @@ but pacstrap adds only eligible included artifacts selected through Catalog v3.
 Reviewed official Arch selections marked online-only are installed into the
 Calamares target before reboot. After the offline baseline initializes the
 target's official pacman configuration, mirrors, and keyring, Calamares runs a
-retried `pacman -Syyu --needed` target-root transaction containing those package
-targets. Unsupported providers and review or license-deferred selections are
-recorded as explicitly deferred for Completion instead.
+retried `pacman -Syyu` target-root transaction (sync + full upgrade, avoiding
+partial-upgrade inconsistency) followed by a `pacman -S --needed` transaction
+for the online selections. The install-time online transaction runs against
+core/extra/multilib only; the official `[linxira]` repository is appended to the
+target only after the online transaction, so installation never depends on
+linxira-os.github.io availability. Unsupported providers and review or
+license-deferred selections are recorded as explicitly deferred for Completion
+instead.
 Legacy
 flat desktop, component, and application chooser pages were removed because
 they used Catalog v2 and could start an unfrozen online package transaction.

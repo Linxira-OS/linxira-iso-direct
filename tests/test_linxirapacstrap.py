@@ -151,7 +151,7 @@ class PacstrapSelectionTests(unittest.TestCase):
             linxirapacstrap._online_sync_command("/target", 180),
             [
                 "arch-chroot", "/target", "/usr/bin/timeout", "--foreground", "180",
-                "/usr/bin/pacman", "-Sy", "--noconfirm",
+                "/usr/bin/pacman", "-Syyu", "--noconfirm",
             ],
         )
         self.assertEqual(
