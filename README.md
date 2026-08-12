@@ -136,15 +136,15 @@ bash scripts/validate-calamares-config.sh \
 ```
 1. Download target closure (804-808 packages) from CN mirror (aliyun)
    → build-scoped cache  .linxira-package-cache
-2. Link all cached .pkg.tar.zst into the profile's offline-repo
+2. Link only the resolved target closure (pacman `--print`) into the offline-repo
    → airootfs/opt/linxira/offline-repo  (repo-add: linxira-offline.db)
 3. pacstrap (at install time, from Live ISO):
    linxira-pacman.conf ([linxira-offline] file:///opt/linxira/offline-repo)
    → installs baseline + selected packages fully offline
 4. mkarchiso → SquashFS (xz, high compression) → xorriso -s 5G → ISO
-5. Post-install: target is validated to drop the offline repository
-   reference (pacman.conf) — TODO: also delete /opt/linxira/offline-repo
-   directory from the installed system (~2.2 GB reclaimed)
+5. Post-install: target is validated to drop the offline repository reference
+   (pacman.conf) and the /opt/linxira/offline-repo directory is removed from the
+   installed system (~2.2 GB reclaimed) for every install, pure offline included
 ```
 
 Build-machine requirements (documented so rebuilds don't regress):

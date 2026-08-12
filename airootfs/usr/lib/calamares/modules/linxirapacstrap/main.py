@@ -757,6 +757,14 @@ def _online_install_command(root, packages, timeout_seconds):
     ]
 
 
+def _remove_offline_repo(root):
+    # Offline package source is only needed during installation. Remove it from
+    # the installed system so users do not carry ~2.2G of redundant .zst files.
+    offline_dir = Path(root) / "opt/linxira/offline-repo"
+    if offline_dir.is_dir():
+        shutil.rmtree(offline_dir, ignore_errors=True)
+
+
 def _validate_online_target(root):
     root_path = Path(root)
     config_path = root_path / "etc/pacman.conf"
@@ -766,11 +774,7 @@ def _validate_online_target(root):
     mirrorlist = mirrorlist_path.read_text(encoding="utf-8")
     if "linxira-offline" in config:
         raise ValueError("target pacman configuration retains the offline repository")
-    # Offline package source is only needed during installation. Remove it from
-    # the installed system so users do not carry ~2.2G of redundant .zst files.
-    offline_dir = root_path / "opt/linxira/offline-repo"
-    if offline_dir.is_dir():
-        shutil.rmtree(offline_dir, ignore_errors=True)
+    _remove_offline_repo(root)
     for repository in ("core", "extra"):
         if not re.search(rf"(?m)^\[{re.escape(repository)}\]\s*$", config):
             raise ValueError("target pacman configuration is missing official repository: " + repository)
@@ -933,6 +937,10 @@ def run():
         error = _run_with_retries(command, "offline pacstrap", retry_count)
         if error:
             return "Package installation failed", error
+
+    # Offline package source is only needed during pacstrap. Remove it for every
+    # install (pure offline included), independent of whether online packages exist.
+    _remove_offline_repo(root)
 
     try:
         _enable_target_multilib(root)

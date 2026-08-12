@@ -417,9 +417,26 @@ printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox
   --sync --refresh --downloadonly --noconfirm --needed \
   "${target_packages[@]}"
 
-mapfile -t cached_packages < <(find "$package_cache" -maxdepth 1 -type f -name '*.pkg.tar.zst' -print)
-for package in "${cached_packages[@]}"; do
-  ln "$package" "${offline_repo}/$(basename "$package")" 2>/dev/null     || cp "$package" "${offline_repo}/$(basename "$package")"
+# B7: 只把 pacman 解析出的目标闭包拷入离线仓库, 避免把 cache 里历史版本或
+# 不属于目标闭包的包一并带进 ISO(版本漂移/体积膨胀)。
+mapfile -t closure_files < <(unshare --map-auto --map-root-user pacman --disable-sandbox \
+  --config "${profile_copy}/pacman.conf" \
+  --dbpath "$pacman_db" \
+  --cachedir "$package_cache" \
+  --logfile /dev/null \
+  --sync --print --print-format '%n %f' \
+  "${target_packages[@]}" | awk '{print $2}')
+if [[ ${#closure_files[@]} -eq 0 ]]; then
+  printf 'The target closure resolved to no packages.\n' >&2
+  exit 1
+fi
+for filename in "${closure_files[@]}"; do
+  src="${package_cache}/${filename}"
+  if [[ ! -f "$src" ]]; then
+    printf 'Missing downloaded closure package: %s\n' "$filename" >&2
+    exit 1
+  fi
+  ln "$src" "${offline_repo}/${filename}" 2>/dev/null || cp "$src" "${offline_repo}/${filename}"
 done
 mapfile -t offline_packages < <(find "$offline_repo" -maxdepth 1 -type f -name '*.pkg.tar.zst' -print)
 if [[ ${#offline_packages[@]} -eq 0 ]]; then
