@@ -926,6 +926,19 @@ def _defer_online_items(result):
     return result
 
 
+def _input_method_packages_for_locale(baseline_packages, installer_locale):
+    """2026-08-13: 输入法按安装语言 —— 仅中文(zh_*)保留 fcitx5 组; 其余语言过滤。
+    Calamares locale 模块将选择写入 globalStorage["locale"] (如 zh_CN.UTF-8)。"""
+    if not isinstance(installer_locale, str) or installer_locale.startswith("zh"):
+        return baseline_packages
+    filtered = [p for p in baseline_packages if not p.startswith("fcitx")]
+    if len(filtered) != len(baseline_packages):
+        libcalamares.utils.debug(
+            "linxirapacstrap: non-Chinese locale; skipping fcitx input method packages"
+        )
+    return filtered
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -951,6 +964,11 @@ def run():
         microcode = _microcode_package()
         if microcode:
             baseline_packages.append(microcode)
+        # 2026-08-13: 输入法按安装语言安装 —— 仅中文(zh_*)安装 fcitx5 组;
+        # 非中文 locale 从 baseline 过滤(离线闭包仍含, 体积策略不变)。
+        # Calamares locale 模块将选择写入 globalStorage["locale"] (如 zh_CN.UTF-8)。
+        installer_locale = libcalamares.globalstorage.value("locale")
+        baseline_packages = _input_method_packages_for_locale(baseline_packages, installer_locale)
         result = _catalog_selection(config, baseline_packages, candidate_packages)
         retry_count = config.get("retryCount", 3)
         if type(retry_count) is not int or not 1 <= retry_count <= 5:
@@ -1053,6 +1071,27 @@ def run():
         _enable_target_linxira_repo(root)
     except (OSError, ValueError) as error:
         return "Target configuration could not be finalized", str(error)
+
+    # 2026-08-13: 预同步 [linxira] 仓库 db, 使装完系统后 linxira-update 首次检查
+    # 即可识别自建包归属(否则包被判 foreign, 报 "No configured pacman repository")。
+    # 失败不致命: 首次 linxira-update 会重试; 仅记 warning 不中断安装。
+    linxira_db_error = _run_with_retries(
+        [
+            "arch-chroot",
+            root,
+            "/usr/bin/pacman",
+            "-Sy",
+            "--noconfirm",
+        ],
+        "linxira repository database synchronization",
+        attempts=1,
+        timeout_seconds=180,
+    )
+    if linxira_db_error:
+        libcalamares.utils.warning(
+            "linxirapacstrap: [linxira] database sync failed (will retry on first update): "
+            + linxira_db_error
+        )
 
     try:
         _write_receipt(

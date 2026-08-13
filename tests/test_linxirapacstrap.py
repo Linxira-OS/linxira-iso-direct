@@ -247,6 +247,22 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertIn("component-uv", result["pendingItems"])
         self.assertNotIn("uv", result["selectedPackages"])
 
+    def test_input_method_follows_installer_locale(self):
+        # 2026-08-13: 中文安装保留 fcitx5 组; 非中文过滤(离线闭包仍含, 不装)
+        baseline = ["base", "fcitx5", "fcitx5-chinese-addons", "firefox"]
+        self.assertEqual(
+            linxirapacstrap._input_method_packages_for_locale(baseline, "zh_CN.UTF-8"),
+            baseline,
+        )
+        self.assertEqual(
+            linxirapacstrap._input_method_packages_for_locale(baseline, "en_US.UTF-8"),
+            ["base", "firefox"],
+        )
+        self.assertEqual(
+            linxirapacstrap._input_method_packages_for_locale(baseline, None),
+            baseline,
+        )
+
     def test_catalog_drift_fails_closed(self):
         selection = self.selection()
         selection["catalogSha256"] = "0" * 64

@@ -11,6 +11,15 @@ fi
 log=/tmp/linxira-installer.log
 : >"$log"
 
+# 2026-08-13: 语言联动 —— welcome 选择的语言(LANG 格式)优先于 live 系统 locale。
+# pkexec 保留 LANG/LC_* 环境变量, calamares welcome 页即以此语言启动。
+if [ -f /tmp/linxira-installer-lang ]; then
+  lang=$(cat /tmp/linxira-installer-lang)
+  case "$lang" in
+    zh_CN|zh_TW|en) export LANG="${lang}.UTF-8" ;;
+  esac
+fi
+
 set +e
 pkexec /usr/bin/calamares >>"$log" 2>&1
 status=$?
