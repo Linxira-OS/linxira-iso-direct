@@ -73,7 +73,7 @@ linux-firmware
 linux-firmware-marvell
 linxira-artwork
 linxira-catalog
-linxira-chwd-detector
+linxira-hwd-detector
 linxira-component-manager
 linxira-components
 linxira-config-hub

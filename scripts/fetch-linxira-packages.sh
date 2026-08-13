@@ -32,7 +32,7 @@ default_packages=(
   linxira-config-hub
   linxira-package-center
   linxira-gaming-manager
-  linxira-chwd-detector
+  linxira-hwd-detector
   linxira-hardware-driver-manager
   linxira-recovery-diagnostics
   linxira-update

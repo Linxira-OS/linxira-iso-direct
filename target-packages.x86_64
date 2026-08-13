@@ -20,7 +20,7 @@ linux-lts
 linux-lts-headers
 linxira-artwork
 linxira-catalog
-linxira-chwd-detector
+linxira-hwd-detector
 linxira-component-manager
 linxira-completion-agent
 linxira-components

@@ -26,7 +26,7 @@ official [linxira] repository first — see below):
   --component-manager-package ./.linxira-packages/linxira-component-manager-*.pkg.tar.zst \
   --completion-agent-package ./.linxira-packages/linxira-completion-agent-*.pkg.tar.zst \
   --gaming-manager-package ./.linxira-packages/linxira-gaming-manager-*.pkg.tar.zst \
-  --chwd-detector-package ./.linxira-packages/linxira-chwd-detector-*.pkg.tar.zst \
+  --hwd-detector-package ./.linxira-packages/linxira-hwd-detector-*.pkg.tar.zst \
   --hardware-driver-manager-package ./.linxira-packages/linxira-hardware-driver-manager-*.pkg.tar.zst \
   --recovery-diagnostics-package ./.linxira-packages/linxira-recovery-diagnostics-*.pkg.tar.zst \
   --update-package ./.linxira-packages/linxira-update-*.pkg.tar.zst \

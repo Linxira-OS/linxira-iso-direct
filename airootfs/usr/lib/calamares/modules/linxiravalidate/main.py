@@ -228,7 +228,7 @@ def run():
         "sddm",
         "linxira-artwork",
         "linxira-catalog",
-        "linxira-chwd-detector",
+        "linxira-hwd-detector",
         "linxira-component-manager",
         "linxira-completion-agent",
         "linxira-components",
@@ -257,7 +257,7 @@ def run():
         if not _package_or_group_installed(root, package):
             failures.append("missing selected package or group: " + package)
     required_versions = {
-        "linxira-chwd-detector": "1.23.0-1",
+        "linxira-hwd-detector": "1.23.0-1",
         "linxira-components": "0.7.0-4",
         "linxira-hardware-driver-manager": "0.4.0-2",
     }
@@ -281,7 +281,8 @@ def run():
         "/usr/bin/linxira-completion-agent",
         "/usr/bin/linxira-components",
         "/usr/bin/linxira-gaming-manager",
-        "/usr/bin/linxira-chwd-detector",
+        "/usr/bin/lhwd",
+        "/usr/bin/linxira-hwd-detector",
         "/usr/bin/linxira-hardware-driver-manager",
         "/usr/bin/linxira-recovery-diagnostics",
         "/usr/bin/linxira-package-center",

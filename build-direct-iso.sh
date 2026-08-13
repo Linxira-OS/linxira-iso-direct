@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --chwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -16,7 +16,7 @@ completion_agent_package=''
 config_hub_package=''
 package_center_package=''
 gaming_manager_package=''
-chwd_detector_package=''
+hwd_detector_package=''
 hardware_driver_manager_package=''
 recovery_diagnostics_package=''
 update_package=''
@@ -82,9 +82,9 @@ while [[ $# -gt 0 ]]; do
       recovery_diagnostics_package=$2
       shift 2
       ;;
-    --chwd-detector-package)
+    --hwd-detector-package)
       [[ $# -ge 2 ]] || usage
-      chwd_detector_package=$2
+      hwd_detector_package=$2
       shift 2
       ;;
     --hardware-driver-manager-package)
@@ -138,7 +138,7 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$config_hub_package" || ! -f "$config_hub_package" ||
       -z "$package_center_package" || ! -f "$package_center_package" ||
        -z "$gaming_manager_package" || ! -f "$gaming_manager_package" ||
-       -z "$chwd_detector_package" || ! -f "$chwd_detector_package" ||
+       -z "$hwd_detector_package" || ! -f "$hwd_detector_package" ||
        -z "$hardware_driver_manager_package" || ! -f "$hardware_driver_manager_package" ||
        -z "$recovery_diagnostics_package" || ! -f "$recovery_diagnostics_package" ||
       -z "$update_package" || ! -f "$update_package" ||
@@ -202,7 +202,7 @@ completion_agent_package=$(realpath "$completion_agent_package")
 config_hub_package=$(realpath "$config_hub_package")
 package_center_package=$(realpath "$package_center_package")
 gaming_manager_package=$(realpath "$gaming_manager_package")
-chwd_detector_package=$(realpath "$chwd_detector_package")
+hwd_detector_package=$(realpath "$hwd_detector_package")
 hardware_driver_manager_package=$(realpath "$hardware_driver_manager_package")
 recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 update_package=$(realpath "$update_package")
@@ -266,11 +266,12 @@ validate_package_artifact "$gaming_manager_package" linxira-gaming-manager \
   usr/share/applications/org.linxira.GamingManager.desktop \
   usr/share/metainfo/org.linxira.GamingManager.metainfo.xml \
   usr/share/licenses/linxira-gaming-manager/LICENSE
-validate_package_artifact "$chwd_detector_package" linxira-chwd-detector \
-  usr/bin/linxira-chwd-detector \
-  usr/share/doc/linxira-chwd-detector/UPSTREAM.md \
-  usr/share/licenses/linxira-chwd-detector/LICENSE
-validate_package_version "$chwd_detector_package" 1.23.0-1
+validate_package_artifact "$hwd_detector_package" linxira-hwd-detector \
+  usr/bin/lhwd \
+  usr/bin/linxira-hwd-detector \
+  usr/share/doc/linxira-hwd-detector/UPSTREAM.md \
+  usr/share/licenses/linxira-hwd-detector/LICENSE
+validate_package_version "$hwd_detector_package" 1.23.0-1
 validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-driver-manager \
   usr/bin/linxira-hardware-driver-manager \
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
@@ -359,7 +360,7 @@ package_artifacts=(
   "$config_hub_package"
   "$package_center_package"
   "$gaming_manager_package"
-  "$chwd_detector_package"
+  "$hwd_detector_package"
   "$hardware_driver_manager_package"
   "$recovery_diagnostics_package"
   "$update_package"

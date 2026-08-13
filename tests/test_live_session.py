@@ -261,7 +261,7 @@ class LiveSessionTests(unittest.TestCase):
             "components_package": "linxira-components",
             "config_hub_package": "linxira-config-hub",
             "gaming_manager_package": "linxira-gaming-manager",
-            "chwd_detector_package": "linxira-chwd-detector",
+            "hwd_detector_package": "linxira-hwd-detector",
             "hardware_driver_manager_package": "linxira-hardware-driver-manager",
             "recovery_diagnostics_package": "linxira-recovery-diagnostics",
             "package_center_package": "linxira-package-center",
@@ -279,7 +279,7 @@ class LiveSessionTests(unittest.TestCase):
             )
         for variable, version in (
             ("components_package", "0.7.0-4"),
-            ("chwd_detector_package", "1.23.0-1"),
+            ("hwd_detector_package", "1.23.0-1"),
             ("hardware_driver_manager_package", "0.4.0-2"),
         ):
             self.assertIn(f'validate_package_version "${variable}" {version}', build)
