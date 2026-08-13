@@ -124,13 +124,22 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["satisfiedItems"], ["desktop-plasma"])
 
     def test_unverified_gnome_selection_fails_closed(self):
-        # 2026-08-09 产品决策: 多桌面支持, gnome 已放行(reviewed)。
-        # 现在是合法选择: 不再抛错, 进入安装流程(在线装)。
+        # 2026-08-13 产品决策: 桌面选择面收窄为 KDE Plasma / 服务器(无桌面)。
+        # gnome 等其余桌面移出选择面(installerVisible:false), 不再可安装期选择。
         selection = self.selection(
             {"desktop-gnome": "desktop-environments/desktop-gnome"}
         )
+        with self.assertRaisesRegex(ValueError, "selectedBundleIds must not be empty|no category-root provenance"):
+            self.validate(selection)
+
+    def test_server_mode_is_a_valid_headless_selection(self):
+        # 2026-08-13: 无桌面服务器模式 —— 合法选择, 不安装任何桌面包。
+        selection = self.selection(
+            {"desktop-server": "desktop-environments/desktop-server"}
+        )
         result = self.validate(selection)
-        self.assertNotIn("gnome-shell", result["pendingItems"])
+        self.assertIn("desktop-server", result["satisfiedItems"])
+        self.assertEqual(result["selectedPackages"], [])
 
     def test_online_reviewed_choice_is_installed_in_target(self):
         selection = self.selection(
@@ -283,7 +292,7 @@ class PacstrapSelectionTests(unittest.TestCase):
     def test_exclusive_desktop_and_tampered_bundle_provenance_fail_closed(self):
         selection = self.selection(
             {
-                "desktop-gnome": "desktop-environments/desktop-gnome",
+                "desktop-server": "desktop-environments/desktop-server",
                 "desktop-plasma": "desktop-environments/desktop-plasma",
             }
         )

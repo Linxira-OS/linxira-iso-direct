@@ -31,6 +31,8 @@ DESKTOP_REQUIREMENTS = {
             "xdg-desktop-portal-gtk",
         ),
     ),
+    # 2026-08-13: 无桌面服务器模式 —— 无 session/无显示管理器校验
+    "desktop-server": (None, ()),
 }
 
 
@@ -225,7 +227,6 @@ def run():
         "shelly",
         "linux",
         "linux-lts",
-        "sddm",
         "linxira-artwork",
         "linxira-catalog",
         "linxira-hwd-detector",
@@ -248,6 +249,9 @@ def run():
     # 引导程序按用户选择校验(grub/systemd-boot/refind), 不再硬编码 grub
     bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
     bootloader_package = {"grub": "grub", "systemd-boot": "systemd-boot", "refind": "refind"}.get(bootloader)
+    # 2026-08-13: 服务器(无桌面)模式不要求 sddm/桌面 session
+    if desktop != "desktop-server":
+        required_packages = required_packages + ("sddm",)
     if bootloader_package:
         required_packages = required_packages + (bootloader_package,)
     for package in required_packages:
@@ -308,9 +312,12 @@ def run():
         "/usr/share/linxira/catalog/catalog-v3.schema.json",
         "/usr/share/linxira/welcome/i18n/zh_CN.json",
         "/var/lib/linxira/installer-selection.json",
-        "/usr/share/wayland-sessions/plasma.desktop",
-        "/usr/share/wayland-sessions/" + selected_session,
     )
+    if desktop != "desktop-server":
+        required_paths = required_paths + (
+            "/usr/share/wayland-sessions/plasma.desktop",
+            "/usr/share/wayland-sessions/" + selected_session,
+        )
     # 引导相关路径按所选引导校验
     bootloader_paths = {
         "grub": ("/boot/grub/grub.cfg",),
@@ -329,18 +336,19 @@ def run():
     for path in _obsolete_initcpio_configs(root):
         failures.append("obsolete initramfs module in: " + path)
 
-    state_path = Path(root) / "var/lib/sddm/state.conf"
-    expected_state = "[Last]\nSession=" + selected_session + "\n"
-    if not state_path.is_file():
-        failures.append("missing file: /var/lib/sddm/state.conf")
-    elif state_path.read_text(encoding="utf-8") != expected_state:
-        failures.append("SDDM default session does not match selected desktop: " + desktop)
+    if desktop != "desktop-server":
+        state_path = Path(root) / "var/lib/sddm/state.conf"
+        expected_state = "[Last]\nSession=" + selected_session + "\n"
+        if not state_path.is_file():
+            failures.append("missing file: /var/lib/sddm/state.conf")
+        elif state_path.read_text(encoding="utf-8") != expected_state:
+            failures.append("SDDM default session does not match selected desktop: " + desktop)
 
-    display_manager = Path(root) / "etc/systemd/system/display-manager.service"
-    if not display_manager.is_symlink():
-        failures.append("SDDM is not the sole display-manager service owner")
-    elif os.readlink(display_manager) != "/usr/lib/systemd/system/sddm.service":
-        failures.append("display-manager.service does not point to sddm.service")
+        display_manager = Path(root) / "etc/systemd/system/display-manager.service"
+        if not display_manager.is_symlink():
+            failures.append("SDDM is not the sole display-manager service owner")
+        elif os.readlink(display_manager) != "/usr/lib/systemd/system/sddm.service":
+            failures.append("display-manager.service does not point to sddm.service")
 
     fstab_path = _target_path(root, "/etc/fstab")
     if os.path.isfile(fstab_path):

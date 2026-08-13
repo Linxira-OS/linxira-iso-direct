@@ -85,19 +85,24 @@ class CatalogTests(unittest.TestCase):
             CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
         )
         desktops = self.catalog["desktops"]
+        # 2026-08-13: 桌面选择面收窄为 KDE Plasma / 服务器(无桌面);
+        # 其余桌面保留元数据但 installerVisible:false。
         self.assertEqual(
             [d["id"] for d in desktops],
             ["desktop-plasma", "desktop-gnome", "desktop-xfce",
              "desktop-hyprland", "desktop-sway", "desktop-cosmic",
              "desktop-cinnamon", "desktop-lxqt", "desktop-lxde",
              "desktop-mate", "desktop-budgie", "desktop-i3",
-             "desktop-openbox"],
+             "desktop-openbox", "desktop-server"],
         )
         for desktop in desktops:
             self.assertEqual(desktop["review"]["status"], "reviewed")
         plasma = next(d for d in desktops if d["id"] == "desktop-plasma")
         self.assertEqual(plasma["availability"]["offlinePolicy"], "included")
         self.assertIn("plasma-desktop", candidate_packages)
+        server = next(d for d in desktops if d["id"] == "desktop-server")
+        self.assertEqual(server["availability"]["offlinePolicy"], "included")
+        self.assertEqual(server["artifact"]["ids"], [])
         # 其余桌面全为 online-only, 不出现在离线候选包中
         for did in ("desktop-xfce", "desktop-lxqt", "desktop-lxde",
                     "desktop-mate", "desktop-budgie", "desktop-i3",
