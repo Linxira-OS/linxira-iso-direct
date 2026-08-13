@@ -502,7 +502,9 @@ class PacstrapSelectionTests(unittest.TestCase):
                 "Server = https://good.example/$repo/os/$arch\n",
             )
 
-    def test_mirror_filter_all_unreachable_keeps_original_list(self):
+    def test_mirror_filter_all_unreachable_falls_back_to_cn_mirrors(self):
+        # 2026-08-13: 官方镜像池全不可达时(国内网络常见), 追加中国镜像 fallback 重测,
+        # 任一可达则写回 mirrorlist, 在线软件立即安装而不是推迟到正式系统后。
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             mirrorlist = root / "etc/pacman.d/mirrorlist"
@@ -513,6 +515,28 @@ class PacstrapSelectionTests(unittest.TestCase):
                 linxirapacstrap.socket,
                 "create_connection",
                 side_effect=self._fake_mirror_connect,
+            ):
+                count = linxirapacstrap._filter_reachable_mirrors(root, 5)
+            self.assertEqual(count, len(linxirapacstrap.FALLBACK_MIRRORS))
+            text = mirrorlist.read_text(encoding="utf-8")
+            self.assertIn("mirrors.tuna.tsinghua.edu.cn", text)
+            self.assertNotIn("bad.example", text)
+
+    def test_mirror_filter_all_unreachable_including_fallback_keeps_original_list(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            mirrorlist = root / "etc/pacman.d/mirrorlist"
+            mirrorlist.parent.mkdir(parents=True)
+            original = "Server = https://bad.example/$repo/os/$arch\n"
+            mirrorlist.write_text(original, encoding="utf-8")
+
+            def refuse_everything(host_port, timeout):
+                raise OSError("connection refused")
+
+            with mock.patch.object(
+                linxirapacstrap.socket,
+                "create_connection",
+                side_effect=refuse_everything,
             ):
                 count = linxirapacstrap._filter_reachable_mirrors(root, 5)
             self.assertEqual(count, 0)

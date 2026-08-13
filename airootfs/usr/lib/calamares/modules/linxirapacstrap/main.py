@@ -27,6 +27,16 @@ INPUT_FIELDS = {
 }
 SELECTION_SCHEMA = "org.linxira.component-selection.v1"
 PENDING_INSTALL_SCHEMA = "org.linxira.pending-install.v1"
+
+# 2026-08-13: 官方镜像池对国内网络可能全部超时, 在线安装前追加的中国镜像 fallback
+# (与 airootfs 的 reflector 排名互补; 仅当官方池全部不可达时启用)
+FALLBACK_MIRRORS = [
+    "https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch",
+    "https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch",
+    "https://mirrors.aliyun.com/archlinux/$repo/os/$arch",
+    "https://mirror.nju.edu.cn/archlinux/$repo/os/$arch",
+    "https://mirrors.hit.edu.cn/archlinux/$repo/os/$arch",
+]
 STABLE_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 PROVENANCE = {"required", "recommended", "optional", "user"}
 
@@ -865,7 +875,7 @@ def _reachable_mirror_servers(mirrorlist_text, connect_timeout=8, maximum=8):
     return reachable
 
 
-def _filter_reachable_mirrors(root, connect_timeout=8, maximum=8):
+def _filter_reachable_mirrors(root, connect_timeout=12, maximum=8):
     mirrorlist = Path(root) / "etc/pacman.d/mirrorlist"
     original = mirrorlist.read_bytes()
     text = original.decode("utf-8", errors="replace")
@@ -874,6 +884,21 @@ def _filter_reachable_mirrors(root, connect_timeout=8, maximum=8):
         return 0
     reachable = _reachable_mirror_servers(text, connect_timeout, maximum)
     if not reachable:
+        # 2026-08-13 修复: 官方镜像池对国内网络可能全部超时(connect 8s 内不可达),
+        # 导致"明明有网却把在线软件推迟到正式系统后安装"。追加中国镜像 fallback
+        # 重测: 任一可达则写回 mirrorlist, 在线软件立即安装。
+        fallback_text = "\n".join("Server = " + server for server in FALLBACK_MIRRORS) + "\n"
+        reachable = _reachable_mirror_servers(fallback_text, connect_timeout, maximum)
+        if reachable:
+            mirrorlist.write_text(
+                "\n".join("Server = " + server for server in reachable) + "\n",
+                encoding="utf-8",
+            )
+            libcalamares.utils.debug(
+                "linxirapacstrap: official mirror pool unreachable; fallback to %d CN mirror(s)"
+                % len(reachable)
+            )
+            return len(reachable)
         libcalamares.utils.debug("linxirapacstrap: no reachable mirror; leaving the list untouched")
         return 0
     if len(reachable) == len(servers):
