@@ -131,12 +131,23 @@ class CatalogTests(unittest.TestCase):
             if item["presentation"]["defaultSelected"]
         ]
         chromium = next(item for item in self.catalog["applications"] if item["id"] == "chromium")
-        # timeshift 是系统恢复标配(2026-08-09 产品决策), 默认选中
-        self.assertEqual(sorted(selected), ["firefox", "timeshift"])
+        # 2026-08-13 修订: timeshift/btop 移入离线基线必装(target-packages), 从 catalog 移除,
+        # 安装器不再显示也不默认勾选(交接文档方案 A)。
+        self.assertEqual(sorted(selected), ["firefox"])
+        self.assertIn("timeshift", packages)
+        self.assertIn("btop", packages)
         self.assertTrue(chromium["presentation"]["recommended"])
         self.assertFalse(chromium["presentation"]["defaultSelected"])
         self.assertIn("firefox", packages)
         self.assertNotIn("chromium", packages)
+        # 2026-08-13 交接文档 Bug #3: 中文输入法缺失。fcitx5 组进离线基线必装,
+        # 环境变量由 airootfs/etc/environment 提供, 不进入 catalog(安装器不显示)。
+        self.assertTrue({"fcitx5", "fcitx5-chinese-addons", "fcitx5-configtool"}.issubset(packages))
+        self.assertTrue(
+            (PROFILE_ROOT / "airootfs/etc/environment").read_text(encoding="utf-8")
+            .splitlines()
+            .__contains__("GTK_IM_MODULE=fcitx")
+        )
 
 
 if __name__ == "__main__":

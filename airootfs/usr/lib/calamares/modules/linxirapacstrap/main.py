@@ -498,6 +498,31 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
     selected_ids = _string_array(submitted["selectedLeafIds"], "selectedLeafIds", nonempty=True)
     selected_bundles = _string_array(submitted["selectedBundleIds"], "selectedBundleIds", nonempty=True)
     bundles, categories, roles = _bundle_graph(catalog)
+
+    hidden_required_ids = set()
+    hidden_required_bundles = set()
+    for bundle_id, bundle in bundles.items():
+        # 2026-08-13 方案 A: timeshift/btop 移入 target-packages 离线必装, catalog 已无 hidden bundle,
+        # 本逻辑保留以防未来引入"用户不可见但必须安装"的隐藏预设。
+        # 仅 hidden bundle 触发: criticalSystemCapability 对可见 bundle(如 bundle-printing-scanning)
+        # 仅表达"系统能力"语义, 不得强制安装其 required 组件。
+        if bundle.get("hidden") and (
+            bundle.get("criticalSystemCapability") or bundle.get("presentation", {}).get("defaultSelected")
+        ):
+            for child_id in _required_bundle_leaf_ids(bundle_id, leaves, bundles, roles):
+                hidden_required_ids.add(child_id)
+            if bundle_id in bundles:
+                hidden_required_bundles.add(bundle_id)
+    if hidden_required_ids:
+        merged = sorted(set(selected_ids) | hidden_required_ids)
+        merged_bundles = sorted(set(selected_bundles) | hidden_required_bundles)
+        libcalamares.utils.debug(
+            "linxirapacstrap: force-including critical-system items: "
+            + ", ".join(sorted(hidden_required_ids))
+        )
+        selected_ids = merged
+        selected_bundles = merged_bundles
+
     unknown_leaves = sorted(set(selected_ids) - set(leaves))
     unknown_bundles = sorted(set(selected_bundles) - set(bundles))
     if unknown_leaves:

@@ -59,6 +59,7 @@ bash-completion
 bluez-hid2hci
 bluez-libs
 bluez-obex
+btop
 cantarell-fonts
 cpupower
 dmidecode
@@ -68,6 +69,11 @@ dnsutils
 duf
 ethtool
 ffmpegthumbnailer
+fcitx5
+fcitx5-chinese-addons
+fcitx5-configtool
+fcitx5-gtk
+fcitx5-qt
 fsarchiver
 gst-libav
 gst-plugin-pipewire
@@ -110,6 +116,7 @@ ttf-dejavu
 ttf-liberation
 ttf-meslo-nerd
 ttf-opensans
+timeshift
 ufw
 unrar
 unzip

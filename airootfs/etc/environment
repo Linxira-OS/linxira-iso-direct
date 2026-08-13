@@ -1,0 +1,6 @@
+# Linxira: fcitx5 is the default input method framework (2026-08-13,
+# 交接文档 Bug #3 中文输入法缺失). 环境变量对 X11 会话生效;
+# Wayland 会话由 fcitx5 的 input-method 协议自动接管。
+GTK_IM_MODULE=fcitx
+QT_IM_MODULE=fcitx
+XMODIFIERS=@im=fcitx
