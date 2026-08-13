@@ -278,9 +278,9 @@ class LiveSessionTests(unittest.TestCase):
                 f'validate_package_artifact "${variable}" {package}', build
             )
         for variable, version in (
-            ("components_package", "0.7.0-4"),
+            ("components_package", "0.7.0-5"),
             ("hwd_detector_package", "1.23.0-1"),
-            ("hardware_driver_manager_package", "0.4.0-2"),
+            ("hardware_driver_manager_package", "0.4.0-3"),
         ):
             self.assertIn(f'validate_package_version "${variable}" {version}', build)
 

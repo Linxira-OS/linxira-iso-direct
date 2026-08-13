@@ -258,8 +258,8 @@ def run():
             failures.append("missing selected package or group: " + package)
     required_versions = {
         "linxira-hwd-detector": "1.23.0-1",
-        "linxira-components": "0.7.0-4",
-        "linxira-hardware-driver-manager": "0.4.0-2",
+        "linxira-components": "0.7.0-5",
+        "linxira-hardware-driver-manager": "0.4.0-3",
     }
     for package, version in required_versions.items():
         installed = _package_version(root, package)
