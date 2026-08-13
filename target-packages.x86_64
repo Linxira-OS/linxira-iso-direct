@@ -44,14 +44,12 @@ python
 pyside6
 shelly
 sudo
-timeshift
 wireplumber
 wireguard-tools
 xdg-desktop-portal
 xdg-desktop-portal-kde
 zram-generator
 syslinux
-btop
 accountsservice
 alsa-firmware
 alsa-plugins
@@ -125,3 +123,4 @@ xdg-user-dirs
 xdg-utils
 xl2tpd
 micro
+vim

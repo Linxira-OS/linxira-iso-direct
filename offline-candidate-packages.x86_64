@@ -1,6 +1,7 @@
 # 离线候选桌面包 —— 随 ISO 附带, 供安装器在离线时选择安装。
 # 2026-08-12 产品决策: 桌面包从无条件 baseline 拆出, 改为 catalog 选择驱动。
-# Plasma(默认)与 Xfce(最稳定离线回退)进离线仓库候选, 选谁装谁; 换桌面时不再强制装 KDE。
+# Plasma(默认)进离线仓库候选; 其余桌面(LXQt/LXDE/MATE/Budgie/i3/Openbox/Xfce)
+# 一律 online-only, 联网时经 linxirapacstrap 在线安装, 不随 ISO 附带以缩小镜像。
 ark
 bluedevil
 dolphin
@@ -19,13 +20,3 @@ polkit-kde-agent
 sddm
 spectacle
 systemsettings
-xfce4
-xfce4-goodies
-xfce4-terminal
-thunar
-lightdm
-lightdm-gtk-greeter
-blueman
-file-roller
-galculator
-gvfs

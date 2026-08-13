@@ -77,10 +77,10 @@ class CatalogTests(unittest.TestCase):
             }.issubset(packages)
         )
 
-    def test_offline_candidates_are_separate_and_exactly_gnome(self):
-        # 2026-08-09 产品决策: 多桌面支持(6 桌面全 reviewed, 对标 CachyOS);
-        # gnome 不再是唯一 offline 候选。此处改为校验多桌面结构一致性。
-        baseline = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+    def test_offline_candidates_are_separate_and_exactly_plasma(self):
+        # 2026-08-09 产品决策: 多桌面支持, 对标 CachyOS。
+        # 2026-08-13 产品决策: 仅 Plasma 离线附带; 其余桌面一律 online-only,
+        # 联网时经 linxirapacstrap 在线安装, 不随 ISO 附带以缩小镜像。
         candidate_packages = set(
             CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
         )
@@ -89,17 +89,23 @@ class CatalogTests(unittest.TestCase):
             [d["id"] for d in desktops],
             ["desktop-plasma", "desktop-gnome", "desktop-xfce",
              "desktop-hyprland", "desktop-sway", "desktop-cosmic",
-             "desktop-cinnamon"],
+             "desktop-cinnamon", "desktop-lxqt", "desktop-lxde",
+             "desktop-mate", "desktop-budgie", "desktop-i3",
+             "desktop-openbox"],
         )
         for desktop in desktops:
             self.assertEqual(desktop["review"]["status"], "reviewed")
         plasma = next(d for d in desktops if d["id"] == "desktop-plasma")
         self.assertEqual(plasma["availability"]["offlinePolicy"], "included")
         self.assertIn("plasma-desktop", candidate_packages)
-        # 2026-08-12 产品决策: Xfce 作为最稳定的离线回退桌面, 也随镜像附带
-        xfce = next(d for d in desktops if d["id"] == "desktop-xfce")
-        self.assertEqual(xfce["availability"]["offlinePolicy"], "included")
-        self.assertIn("xfce4", candidate_packages)
+        # 其余桌面全为 online-only, 不出现在离线候选包中
+        for did in ("desktop-xfce", "desktop-lxqt", "desktop-lxde",
+                    "desktop-mate", "desktop-budgie", "desktop-i3",
+                    "desktop-openbox"):
+            d = next(dd for dd in desktops if dd["id"] == did)
+            self.assertEqual(d["availability"]["offlinePolicy"], "online-only")
+        self.assertNotIn("xfce4", candidate_packages)
+        self.assertNotIn("lightdm", candidate_packages)
 
         build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
         self.assertIn('target_packages+=("${candidate_packages[@]}")', build)
