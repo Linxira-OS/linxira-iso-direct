@@ -271,7 +271,7 @@ validate_package_artifact "$hwd_detector_package" linxira-hwd-detector \
   usr/bin/linxira-hwd-detector \
   usr/share/doc/linxira-hwd-detector/UPSTREAM.md \
   usr/share/licenses/linxira-hwd-detector/LICENSE
-validate_package_version "$hwd_detector_package" 1.23.0-1
+validate_package_version "$hwd_detector_package" 1.23.0-2
 validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-driver-manager \
   usr/bin/linxira-hardware-driver-manager \
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
