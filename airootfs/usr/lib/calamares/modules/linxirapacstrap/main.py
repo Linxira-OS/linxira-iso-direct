@@ -939,6 +939,57 @@ def _input_method_packages_for_locale(baseline_packages, installer_locale):
     return filtered
 
 
+def _configure_chinese_input_method(root, installer_locale):
+    """2026-08-14: 中文 locale 预配置输入法运行环境:
+    - /etc/environment: X11 IM 变量 (GTK_IM_MODULE/QT_IM_MODULE/XMODIFIERS)
+    - /etc/skel/.config/fcitx5/profile: 默认启用 pinyin (拼音/双拼由
+      fcitx5-chinese-addons 提供); users 模块创建用户时复制到新用户,
+      装完即可直接切换输入, 无需手动添加。
+    仅在 fcitx5 组随 zh locale 安装时生效; 失败仅警告不中断安装。"""
+    if not isinstance(installer_locale, str) or not installer_locale.startswith("zh"):
+        return
+    try:
+        environment = os.path.join(root, "etc/environment")
+        os.makedirs(os.path.dirname(environment), exist_ok=True)
+        additions = [
+            "GTK_IM_MODULE=fcitx",
+            "QT_IM_MODULE=fcitx",
+            "XMODIFIERS=@im=fcitx",
+        ]
+        existing = set()
+        try:
+            with open(environment, encoding="utf-8") as handle:
+                existing = {line.strip() for line in handle}
+        except OSError:
+            pass
+        with open(environment, "a", encoding="utf-8") as handle:
+            for line in additions:
+                if line not in existing:
+                    handle.write(line + "\n")
+        profile = os.path.join(root, "etc/skel/.config/fcitx5/profile")
+        os.makedirs(os.path.dirname(profile), exist_ok=True)
+        with open(profile, "w", encoding="utf-8") as handle:
+            handle.write(
+                "[Groups/0]\n"
+                "Name=Default\n"
+                "Default Layout=us\n"
+                "DefaultIM=pinyin\n"
+                "\n"
+                "[Groups/0/Items/0]\n"
+                "Name=keyboard-us\n"
+                "Layout=\n"
+                "\n"
+                "[Groups/0/Items/1]\n"
+                "Name=pinyin\n"
+                "Layout=\n"
+            )
+        libcalamares.utils.debug("linxirapacstrap: preconfigured fcitx5 (pinyin default) for zh locale")
+    except OSError as error:
+        libcalamares.utils.warning(
+            "linxirapacstrap: fcitx5 preconfiguration failed (will configure manually): " + str(error)
+        )
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -969,6 +1020,7 @@ def run():
         # Calamares locale 模块将选择写入 globalStorage["locale"] (如 zh_CN.UTF-8)。
         installer_locale = libcalamares.globalstorage.value("locale")
         baseline_packages = _input_method_packages_for_locale(baseline_packages, installer_locale)
+        _configure_chinese_input_method(root, installer_locale)
         result = _catalog_selection(config, baseline_packages, candidate_packages)
         retry_count = config.get("retryCount", 3)
         if type(retry_count) is not int or not 1 <= retry_count <= 5:

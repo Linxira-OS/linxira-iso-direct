@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -271,6 +272,36 @@ class PacstrapSelectionTests(unittest.TestCase):
             linxirapacstrap._input_method_packages_for_locale(baseline, None),
             baseline,
         )
+
+    def test_chinese_input_method_preconfigured_for_zh_locale(self):
+        # 2026-08-14: zh 安装预写 /etc/environment IM 变量 + skel fcitx5 profile(默认拼音)
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as root:
+            linxirapacstrap._configure_chinese_input_method(root, "zh_CN.UTF-8")
+            environment = os.path.join(root, "etc/environment")
+            self.assertTrue(os.path.isfile(environment))
+            with open(environment, encoding="utf-8") as handle:
+                content = handle.read()
+            self.assertIn("GTK_IM_MODULE=fcitx", content)
+            self.assertIn("QT_IM_MODULE=fcitx", content)
+            self.assertIn("XMODIFIERS=@im=fcitx", content)
+            profile = os.path.join(root, "etc/skel/.config/fcitx5/profile")
+            self.assertTrue(os.path.isfile(profile))
+            with open(profile, encoding="utf-8") as handle:
+                self.assertIn("DefaultIM=pinyin", handle.read())
+
+    def test_chinese_input_method_skipped_for_non_zh_locale(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as root:
+            linxirapacstrap._configure_chinese_input_method(root, "en_US.UTF-8")
+            self.assertFalse(
+                os.path.exists(os.path.join(root, "etc/environment"))
+            )
+            self.assertFalse(
+                os.path.exists(os.path.join(root, "etc/skel/.config/fcitx5/profile"))
+            )
 
     def test_catalog_drift_fails_closed(self):
         selection = self.selection()
