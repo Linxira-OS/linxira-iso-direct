@@ -8,4 +8,6 @@ Target = *
 [Action]
 Description = Creating Timeshift snapshot before pacman transaction...
 When = PreTransaction
-Exec = /usr/bin/timeshift --create --comments "pacman transaction auto-snapshot" --tags D
+# 守卫: 未应用 timeshift 配置时静默跳过; 快照失败不阻塞 pacman 事务 (PreTransaction 非零退出会中止事务)
+# 建快照后修剪配额: 更新前回滚点保留最近 20 个
+Exec = /bin/sh -c 'if [ -f /etc/timeshift/timeshift.json ]; then /usr/bin/timeshift --create --comments "pacman transaction auto-snapshot" --tags O || true; [ -x /usr/share/linxira/timeshift/linxira-timeshift-prune.sh ] && /usr/share/linxira/timeshift/linxira-timeshift-prune.sh || true; fi'
