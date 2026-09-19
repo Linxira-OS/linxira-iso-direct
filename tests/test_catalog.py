@@ -138,8 +138,10 @@ class CatalogTests(unittest.TestCase):
         chromium = next(item for item in self.catalog["applications"] if item["id"] == "chromium")
         # 2026-08-13 修订: timeshift/btop 移入离线基线必装(target-packages), 从 catalog 移除,
         # 安装器不再显示也不默认勾选(交接文档方案 A)。
-        # 2026-08-13 追加: steam 默认勾选(游戏工具默认装载, 用户决策)。
-        self.assertEqual(sorted(selected), ["firefox", "steam"])
+        # 2026-09-19 修订: 8/13 的"steam 默认勾选"已被 catalog 主线废止——瘦身批次
+        # 将 steam 改为 online-only 且不再默认勾选, 测试对齐现实; 恢复默认勾选属
+        # catalog 侧产品决策, 不在本仓断言。
+        self.assertEqual(sorted(selected), ["firefox"])
         self.assertIn("timeshift", packages)
         self.assertIn("btop", packages)
         self.assertTrue(chromium["presentation"]["recommended"])

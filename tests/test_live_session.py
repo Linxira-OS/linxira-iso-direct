@@ -241,7 +241,7 @@ class LiveSessionTests(unittest.TestCase):
             PROFILE_ROOT / "airootfs/etc/calamares/modules/initcpiocfg.conf"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "      - initcpiocfg\n      - linxirabranding\n      - initcpio",
+            "      - initcpiocfg\n      - linxirabranding\n      - linxiraboot\n      - initcpio",
             settings,
         )
         self.assertIn("  remove:\n    - consolefont\n", initcpiocfg)
