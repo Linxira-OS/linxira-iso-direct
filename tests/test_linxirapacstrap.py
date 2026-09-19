@@ -409,8 +409,8 @@ class PacstrapSelectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             result = {
                 "onlinePackages": [],
-                "onlineSatisfiedLeafIds": ["code", "chromium"],
-                "pendingItems": ["code", "chromium"],
+                "onlineSatisfiedLeafIds": ["code", "chromium", "component-uv"],
+                "pendingItems": ["code", "chromium", "component-uv"],
             }
             linxirapacstrap._write_pending_install(
                 Path(directory), result, str(CATALOG_PATH)
@@ -420,11 +420,28 @@ class PacstrapSelectionTests(unittest.TestCase):
             payload = json.loads(queue_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["schemaVersion"], "org.linxira.pending-install.v1")
             leaf_ids = [entry["leafId"] for entry in payload["pending"]]
+            # 只收 applications：组件叶子（component-uv）由组件管理器负责，
+            # 进队列会让 package-center 的清理条件永假、欢迎横幅永不消失。
             self.assertEqual(leaf_ids, ["chromium", "code"])
             entry = payload["pending"][0]
             self.assertEqual(entry["offlinePolicy"], "online-only")
             self.assertIsInstance(entry["name"], dict)
             self.assertIsInstance(entry["packages"], list)
+
+    def test_pending_install_queue_removed_when_only_components_deferred(self):
+        with tempfile.TemporaryDirectory() as directory:
+            queue_path = Path(directory) / "var/lib/linxira/pending-install.json"
+            queue_path.parent.mkdir(parents=True)
+            queue_path.write_text('{"stale": true}\n', encoding="utf-8")
+            result = {
+                "onlinePackages": [],
+                "onlineSatisfiedLeafIds": ["component-uv"],
+                "pendingItems": ["component-uv"],
+            }
+            linxirapacstrap._write_pending_install(
+                Path(directory), result, str(CATALOG_PATH)
+            )
+            self.assertFalse(queue_path.exists())
 
     def test_pending_install_queue_removed_when_no_deferral(self):
         with tempfile.TemporaryDirectory() as directory:

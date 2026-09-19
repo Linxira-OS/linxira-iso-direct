@@ -673,7 +673,15 @@ def _write_receipt(root, result, baseline_packages, selected_packages):
 def _write_pending_install(root, result, catalog_path):
     """Publish a first-boot install queue for online packages deferred at
     install time. The queue is removed when no online packages were deferred,
-    so welcome can detect a non-empty file and offer to continue the install."""
+    so welcome can detect a non-empty file and offer to continue the install.
+
+    Only application leaves enter the queue: its sole consumer
+    (linxira-package-center) installs the applications surface and clears the
+    file once every queued application is installed. Component/desktop
+    deferrals stay visible in installer-selection.json (pendingItems /
+    explicitly-deferred) and are handled through their own managers — queuing
+    them here made the clear condition unsatisfiable and the welcome banner
+    permanent."""
     pending = []
     if not result.get("onlinePackages"):
         pending = sorted(result.get("onlineSatisfiedLeafIds", []))
@@ -683,11 +691,17 @@ def _write_pending_install(root, result, catalog_path):
         return
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     catalog = _strict_json(Path(catalog_path).read_bytes())
-    leaves = {
-        item["id"]: item
-        for section in ("desktops", "applications", "components")
-        for item in catalog.get(section, [])
-    }
+    section_of = {}
+    leaves = {}
+    for section in ("desktops", "applications", "components"):
+        for item in catalog.get(section, []):
+            if isinstance(item, dict) and "id" in item:
+                section_of[item["id"]] = section
+                leaves[item["id"]] = item
+    pending = [leaf_id for leaf_id in pending if section_of.get(leaf_id) == "applications"]
+    if not pending:
+        queue_path.unlink(missing_ok=True)
+        return
     entries = []
     for leaf_id in pending:
         leaf = leaves.get(leaf_id)
