@@ -14,9 +14,13 @@ MKINITCPIO_TARGET = Path("etc/mkinitcpio.conf")
 TEMPLATE_DIR = Path("/usr/share/linxira/timeshift")
 TEMPLATE_FILES = ("timeshift.json", "linxira-timeshift-autosnap.hook", "linxira-timeshift-enable.sh", "linxira-timeshift-prune.sh")
 
-# 顶层平铺双内核: linux(最新) 与 linux-lts 都直接可见, GRUB_DEFAULT=0 默认最新
+# 顶层平铺双内核: linux(最新) 与 linux-lts 都直接可见, GRUB_DEFAULT=0 默认最新。
+# 2026-09-20 修复: GRUB_DEFAULT=0 的"第一项"由 grub 10_linux 字符串排序决定,
+# "linux-lts" 会被误排到 "linux" 之前 —— 默认启动落进 LTS。GRUB_TOP_LEVEL
+# 显式钉死主线内核为顶层默认项, LTS 仅作平铺菜单中的回退项。
 GRUB_SETTINGS = [
     ("GRUB_DEFAULT", "0"),
+    ("GRUB_TOP_LEVEL", '"/boot/vmlinuz-linux"'),
     ("GRUB_TIMEOUT", "5"),
     ("GRUB_DISABLE_SUBMENU", "true"),
     ("GRUB_DISABLE_RECOVERY", "true"),

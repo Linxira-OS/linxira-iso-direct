@@ -1,11 +1,13 @@
 # Linxira OS: GRUB 双内核平铺菜单
 # 2026-08-13 修复: GRUB_DISABLE_SUBMENU=true 不折叠子菜单,
 # 所有内核(linux / linux-lts)直接平铺在开机菜单, 无需进入 option 子菜单。
-# 默认启动最新内核(linux 7.x), lts 仅作回退: GRUB_DEFAULT 按 menuentry 标题
-# 精确锁定 "Linux linux"(确定性, 不依赖条目排序)。
+# 2026-09-20 修复: 默认内核不再依赖 menuentry 标题匹配(品牌化改标题后
+# "Linux linux" 标题已不存在, 锁定静默失效落进 LTS)。GRUB_TOP_LEVEL 显式
+# 钉死主线内核为顶层默认项 —— 与 linxiraboot 模块写入目标系统的配置一致。
 GRUB_TIMEOUT=5
 GRUB_DISABLE_SUBMENU=true
-GRUB_DEFAULT="Linux linux"
+GRUB_TOP_LEVEL="/boot/vmlinuz-linux"
+GRUB_DEFAULT=0
 # 支持多系统探测 (Windows 双系统等)
 GRUB_DISABLE_OS_PROBER=false
 GRUB_DISABLE_RECOVERY=true
