@@ -1,0 +1,17 @@
+[Unit]
+Description=Linxira first-online repository sync
+# 离线安装的系统装机时没有成功的 pacman -Sy, /var/lib/pacman/sync/linxira.db
+# 缺失, [linxira] 源的更新与组件安装会一直失败。首次联网后补建; 幂等,
+# 始终无网时静默退出, 下次开机重试。
+Documentation=https://github.com/Linxira-OS/linxira-iso-direct
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/pacman/sync/linxira.db
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/linxira/linxira-online-sync
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

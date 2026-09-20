@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# 首次联网补建 [linxira] 源同步库: 离线安装的系统装机时没有成功的
+# pacman -Sy, 更新链路(linxira-update / package-center / component-manager)
+# 在第一次成功的 -Sy 之前全部无源可用。幂等: 库已存在立即退出;
+# 无网时重试后放弃, 下次开机由 unit 的 Condition 再次触发。
+set -u
+
+LOG_TAG=linxira-online-sync
+
+if [[ -f /var/lib/pacman/sync/linxira.db ]]; then
+    exit 0
+fi
+
+for attempt in 1 2 3 4 5; do
+    if timeout 90 pacman -Sy --noconfirm >/dev/null 2>&1; then
+        logger -t "$LOG_TAG" "repository databases synced on attempt ${attempt}"
+        exit 0
+    fi
+    logger -t "$LOG_TAG" "sync attempt ${attempt} failed"
+    sleep 20
+done
+
+logger -t "$LOG_TAG" "repositories still unreachable; retrying on next boot"
+exit 0
