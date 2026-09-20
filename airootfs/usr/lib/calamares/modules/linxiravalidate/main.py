@@ -14,6 +14,38 @@ OBSOLETE_INITCPIO_MODULE = re.compile(
     r"(?<![A-Za-z0-9_-])crc32c(?:-|_)intel(?![A-Za-z0-9_-])"
 )
 DESKTOP_REQUIREMENTS = {
+    # 2026-09-20: COSMIC 第二个一等桌面 —— 逐包校验, 与 catalog artifact ids 对齐。
+    "desktop-cosmic": (
+        "cosmic-session.desktop",
+        (
+            "cosmic-app-library",
+            "cosmic-applets",
+            "cosmic-bg",
+            "cosmic-comp",
+            "cosmic-files",
+            "cosmic-icon-theme",
+            "cosmic-idle",
+            "cosmic-launcher",
+            "cosmic-monitor",
+            "cosmic-notifications",
+            "cosmic-osd",
+            "cosmic-panel",
+            "cosmic-randr",
+            "cosmic-screenshot",
+            "cosmic-session",
+            "cosmic-settings",
+            "cosmic-settings-daemon",
+            "cosmic-sound-theme",
+            "cosmic-store",
+            "cosmic-terminal",
+            "cosmic-text-editor",
+            "cosmic-wallpapers",
+            "cosmic-workspaces",
+            "pop-icon-theme",
+            "sddm",
+            "xdg-desktop-portal-cosmic",
+        ),
+    ),
     "desktop-plasma": ("plasma.desktop", ()),
     "desktop-gnome": (
         "gnome.desktop",

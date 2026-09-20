@@ -77,16 +77,18 @@ class CatalogTests(unittest.TestCase):
             }.issubset(packages)
         )
 
-    def test_offline_candidates_are_separate_and_exactly_plasma(self):
+    def test_offline_candidates_are_separate_plasma_and_cosmic(self):
         # 2026-08-09 产品决策: 多桌面支持, 对标 CachyOS。
         # 2026-08-13 产品决策: 仅 Plasma 离线附带; 其余桌面一律 online-only,
         # 联网时经 linxirapacstrap 在线安装, 不随 ISO 附带以缩小镜像。
+        # 2026-09-20 产品决策: COSMIC 升级为第二个一等桌面, 同样离线附带。
         candidate_packages = set(
             CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
         )
         desktops = self.catalog["desktops"]
         # 2026-08-13: 桌面选择面收窄为 KDE Plasma / 服务器(无桌面);
         # 其余桌面保留元数据但 installerVisible:false。
+        # 2026-09-20: COSMIC 升级为第二个一等桌面, 与 Plasma 同级离线附带。
         self.assertEqual(
             [d["id"] for d in desktops],
             ["desktop-plasma", "desktop-gnome", "desktop-xfce",
@@ -103,6 +105,12 @@ class CatalogTests(unittest.TestCase):
         server = next(d for d in desktops if d["id"] == "desktop-server")
         self.assertEqual(server["availability"]["offlinePolicy"], "included")
         self.assertEqual(server["artifact"]["ids"], [])
+        cosmic = next(d for d in desktops if d["id"] == "desktop-cosmic")
+        self.assertEqual(cosmic["availability"]["offlinePolicy"], "included")
+        self.assertNotIn("installerVisible", cosmic["presentation"])
+        # COSMIC 顶层集合必须全部随镜像附带(pacstrap included-artifact 校验依赖)
+        self.assertTrue(set(cosmic["artifact"]["ids"]).issubset(candidate_packages))
+        self.assertIn("cosmic-session", candidate_packages)
         # 其余桌面全为 online-only, 不出现在离线候选包中
         for did in ("desktop-xfce", "desktop-lxqt", "desktop-lxde",
                     "desktop-mate", "desktop-budgie", "desktop-i3",

@@ -8,6 +8,7 @@ import libcalamares
 
 
 DESKTOP_SESSIONS = {
+    "desktop-cosmic": "cosmic-session.desktop",
     "desktop-gnome": "gnome.desktop",
     "desktop-plasma": "plasma.desktop",
 }

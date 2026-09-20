@@ -13,6 +13,7 @@ MODULE_PATH = (
     Path(__file__).parents[1]
     / "airootfs/usr/lib/calamares/modules/linxiravalidate/main.py"
 )
+CATALOG_PATH = Path(__file__).parents[2] / "linxira-catalog/catalog/catalog-v3.json"
 sys.modules.setdefault("libcalamares", types.ModuleType("libcalamares"))
 spec = importlib.util.spec_from_file_location("linxiravalidate", MODULE_PATH)
 linxiravalidate = importlib.util.module_from_spec(spec)
@@ -71,6 +72,48 @@ class InstalledSystemValidationTests(unittest.TestCase):
     def test_validator_requires_installer_selection_receipt(self):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn('"/var/lib/linxira/installer-selection.json"', source)
+
+    def test_cosmic_first_class_desktop_requirements_match_catalog(self):
+        # 2026-09-20: COSMIC 第二个一等桌面 —— 会话文件 + 逐包校验集合,
+        # 与 catalog desktop-cosmic artifact ids 完全一致。
+        session, packages = linxiravalidate.DESKTOP_REQUIREMENTS["desktop-cosmic"]
+        self.assertEqual(session, "cosmic-session.desktop")
+        self.assertEqual(
+            list(packages),
+            [
+                "cosmic-app-library",
+                "cosmic-applets",
+                "cosmic-bg",
+                "cosmic-comp",
+                "cosmic-files",
+                "cosmic-icon-theme",
+                "cosmic-idle",
+                "cosmic-launcher",
+                "cosmic-monitor",
+                "cosmic-notifications",
+                "cosmic-osd",
+                "cosmic-panel",
+                "cosmic-randr",
+                "cosmic-screenshot",
+                "cosmic-session",
+                "cosmic-settings",
+                "cosmic-settings-daemon",
+                "cosmic-sound-theme",
+                "cosmic-store",
+                "cosmic-terminal",
+                "cosmic-text-editor",
+                "cosmic-wallpapers",
+                "cosmic-workspaces",
+                "pop-icon-theme",
+                "sddm",
+                "xdg-desktop-portal-cosmic",
+            ],
+        )
+        catalog = json.loads(
+            (CATALOG_PATH).read_text(encoding="utf-8")
+        )
+        cosmic = next(d for d in catalog["desktops"] if d["id"] == "desktop-cosmic")
+        self.assertEqual(set(packages), set(cosmic["artifact"]["ids"]))
 
     def test_selected_catalog_packages_are_returned_for_validation(self):
         with tempfile.TemporaryDirectory() as temporary_root:
