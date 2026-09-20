@@ -1,0 +1,17 @@
+# 纯 Arch 最小安装基线 —— 仅在选择「服务器 · 纯 Arch 最小安装」时替换
+# 标准 target 基线。不含 Linxira 工具链/桌面管线/[linxira] 仓库/keyring,
+# 供用户手工安装自己想要的桌面或组件。
+# 约束: 必须是 target-packages.x86_64 的子集(离线仓库闭包由此生成)。
+base
+btrfs-progs
+curl
+efibootmgr
+grub
+linux
+linux-firmware
+linux-headers
+linux-lts
+linux-lts-headers
+networkmanager
+openssh
+sudo

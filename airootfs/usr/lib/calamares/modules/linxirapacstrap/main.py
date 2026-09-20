@@ -465,7 +465,7 @@ def _validate_selection_document(selection, leaves, bundles, roles):
         raise ValueError("selection violates a Catalog category constraint")
 
 
-def _catalog_selection(config, baseline_packages, candidate_packages):
+def _catalog_selection(config, baseline_packages, candidate_packages, minimal_baseline=None):
     submitted = libcalamares.globalstorage.value(
         config.get("selectionKey", "linxiraSoftwareSelection")
     )
@@ -507,6 +507,15 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
     }
     selected_ids = _string_array(submitted["selectedLeafIds"], "selectedLeafIds", nonempty=True)
     selected_bundles = _string_array(submitted["selectedBundleIds"], "selectedBundleIds", nonempty=True)
+    # 2026-09-20: 服务器模式可选「纯 Arch 最小安装」—— 选择 desktop-server-minimal
+    # 时基线整体切换为最小清单(不含 Linxira 工具链/桌面管线/固件工具),
+    # 供纯原生服务器; [linxira] 源与 keyring 亦不启用(run() 内按标记跳过)。
+    minimal_selected = (
+        minimal_baseline is not None
+        and "desktop-server-minimal" in set(selected_ids)
+    )
+    if minimal_selected:
+        baseline_packages = list(minimal_baseline)
     bundles, categories, roles = _bundle_graph(catalog)
 
     hidden_required_ids = set()
@@ -630,6 +639,8 @@ def _catalog_selection(config, baseline_packages, candidate_packages):
         "pendingItems": pending,
         "catalogSha256": digest,
         "catalogRelease": catalog["release"],
+        "minimalBaseline": minimal_selected,
+        "baselinePackages": baseline_packages,
     }
 
 
@@ -1034,8 +1045,18 @@ def run():
         # Calamares locale 模块将选择写入 globalStorage["locale"] (如 zh_CN.UTF-8)。
         installer_locale = libcalamares.globalstorage.value("locale")
         baseline_packages = _input_method_packages_for_locale(baseline_packages, installer_locale)
-        _configure_chinese_input_method(root, installer_locale)
-        result = _catalog_selection(config, baseline_packages, candidate_packages)
+        # 2026-09-20: 可选最小基线清单 —— 选择「纯 Arch 最小安装」时替换基线
+        minimal_baseline = None
+        minimal_manifest = config.get("minimalPackageManifest")
+        if minimal_manifest and os.path.isfile(minimal_manifest):
+            minimal_baseline = _manifest(minimal_manifest)
+        result = _catalog_selection(config, baseline_packages, candidate_packages, minimal_baseline)
+        if result.get("minimalBaseline"):
+            # 回执与后续流程必须记录"实际安装"的基线
+            baseline_packages = result["baselinePackages"]
+        else:
+            # fcitx5 预配置仅对标准基线有意义; 纯 Arch 最小安装无输入法包
+            _configure_chinese_input_method(root, installer_locale)
         retry_count = config.get("retryCount", 3)
         if type(retry_count) is not int or not 1 <= retry_count <= 5:
             raise ValueError("retryCount must be an integer from 1 through 5")
@@ -1133,31 +1154,33 @@ def run():
     # 在线事务只在官方 core/extra/multilib 上进行, 排除官方 [linxira] 仓库,
     # 避免安装期 sync 依赖 linxira-os.github.io 的可达性. 事务完成后才写入
     # [linxira], 供首启后的 linxira-update 跟踪自建包.
-    try:
-        _enable_target_linxira_repo(root)
-    except (OSError, ValueError) as error:
-        return "Target configuration could not be finalized", str(error)
+    # 2026-09-20: 「纯 Arch 最小安装」不启用 [linxira] 仓库/预同步 —— 纯原生。
+    if not result.get("minimalBaseline"):
+        try:
+            _enable_target_linxira_repo(root)
+        except (OSError, ValueError) as error:
+            return "Target configuration could not be finalized", str(error)
 
-    # 2026-08-13: 预同步 [linxira] 仓库 db, 使装完系统后 linxira-update 首次检查
-    # 即可识别自建包归属(否则包被判 foreign, 报 "No configured pacman repository")。
-    # 失败不致命: 首次 linxira-update 会重试; 仅记 warning 不中断安装。
-    linxira_db_error = _run_with_retries(
-        [
-            "arch-chroot",
-            root,
-            "/usr/bin/pacman",
-            "-Sy",
-            "--noconfirm",
-        ],
-        "linxira repository database synchronization",
-        attempts=1,
-        timeout_seconds=180,
-    )
-    if linxira_db_error:
-        libcalamares.utils.warning(
-            "linxirapacstrap: [linxira] database sync failed (will retry on first update): "
-            + linxira_db_error
+        # 2026-08-13: 预同步 [linxira] 仓库 db, 使装完系统后 linxira-update 首次检查
+        # 即可识别自建包归属(否则包被判 foreign, 报 "No configured pacman repository")。
+        # 失败不致命: 首次 linxira-update 会重试; 仅记 warning 不中断安装。
+        linxira_db_error = _run_with_retries(
+            [
+                "arch-chroot",
+                root,
+                "/usr/bin/pacman",
+                "-Sy",
+                "--noconfirm",
+            ],
+            "linxira repository database synchronization",
+            attempts=1,
+            timeout_seconds=180,
         )
+        if linxira_db_error:
+            libcalamares.utils.warning(
+                "linxirapacstrap: [linxira] database sync failed (will retry on first update): "
+                + linxira_db_error
+            )
 
     try:
         _write_receipt(

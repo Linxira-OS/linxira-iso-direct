@@ -65,6 +65,8 @@ DESKTOP_REQUIREMENTS = {
     ),
     # 2026-08-13: 无桌面服务器模式 —— 无 session/无显示管理器校验
     "desktop-server": (None, ()),
+    # 2026-09-20: 纯 Arch 最小安装 —— 同服务器, 基线为最小清单
+    "desktop-server-minimal": (None, ()),
 }
 
 

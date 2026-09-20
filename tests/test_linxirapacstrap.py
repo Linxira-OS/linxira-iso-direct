@@ -142,6 +142,33 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertIn("desktop-server", result["satisfiedItems"])
         self.assertEqual(result["selectedPackages"], [])
 
+    def test_server_minimal_selection_swaps_to_pure_arch_baseline(self):
+        # 2026-09-20: 「纯 Arch 最小安装」—— 选择 desktop-server-minimal 时
+        # 基线整体切换为最小清单(不含 Linxira 工具链), 纯原生服务器。
+        minimal = linxirapacstrap._manifest(
+            PROFILE_ROOT / "target-packages-minimal.x86_64"
+        )
+        self.assertTrue(minimal)
+        self.assertTrue(set(minimal) <= self.base_set)
+        selection = self.selection(
+            {"desktop-server-minimal": "desktop-environments/desktop-server-minimal"}
+        )
+        with mock.patch.object(
+            libcalamares.globalstorage, "value", return_value=selection
+        ):
+            result = linxirapacstrap._catalog_selection(
+                self.config, self.baseline, self.candidates, minimal
+            )
+        self.assertTrue(result["minimalBaseline"])
+        self.assertEqual(result["baselinePackages"], minimal)
+        self.assertNotIn("linxira-welcome", result["baselinePackages"])
+        self.assertIn("desktop-server-minimal", result["satisfiedItems"])
+        self.assertEqual(result["selectedPackages"], [])
+        # 未提供最小清单时行为不变(向后兼容)
+        result_plain = self.validate(selection)
+        self.assertFalse(result_plain["minimalBaseline"])
+        self.assertIn("linxira-welcome", result_plain["baselinePackages"])
+
     def test_online_reviewed_choice_is_installed_in_target(self):
         selection = self.selection(
             {

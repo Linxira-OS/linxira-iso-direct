@@ -382,9 +382,12 @@ if grep -q '@LINXIRA_LOCAL_REPO@' "${profile_copy}/pacman.conf"; then
 fi
 
 target_manifest="${profile_copy}/target-packages.x86_64"
+minimal_manifest="${profile_copy}/target-packages-minimal.x86_64"
 candidate_manifest="${profile_copy}/offline-candidate-packages.x86_64"
 install -Dm644 "$target_manifest" \
   "${profile_copy}/airootfs/etc/calamares/target-packages.x86_64"
+install -Dm644 "$minimal_manifest" \
+  "${profile_copy}/airootfs/etc/calamares/target-packages-minimal.x86_64"
 install -Dm644 "$candidate_manifest" \
   "${profile_copy}/airootfs/etc/calamares/offline-candidate-packages.x86_64"
 branding_dir="${profile_copy}/airootfs/etc/calamares/branding/linxira"

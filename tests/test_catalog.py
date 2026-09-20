@@ -95,7 +95,7 @@ class CatalogTests(unittest.TestCase):
              "desktop-hyprland", "desktop-sway", "desktop-cosmic",
              "desktop-cinnamon", "desktop-lxqt", "desktop-lxde",
              "desktop-mate", "desktop-budgie", "desktop-i3",
-             "desktop-openbox", "desktop-server"],
+             "desktop-openbox", "desktop-server", "desktop-server-minimal"],
         )
         for desktop in desktops:
             self.assertEqual(desktop["review"]["status"], "reviewed")
