@@ -132,9 +132,14 @@ class CatalogTests(unittest.TestCase):
     def test_shared_desktop_plumbing_is_in_live_and_target(self):
         live = set((PROFILE_ROOT / "packages.x86_64").read_text(encoding="utf-8").splitlines())
         target = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
-        shared = {"wireplumber", "xdg-desktop-portal", "xdg-desktop-portal-kde"}
+        shared = {"wireplumber", "xdg-desktop-portal"}
         self.assertTrue(shared.issubset(live))
         self.assertTrue(shared.issubset(target))
+        # 2026-09-21: xdg-desktop-portal-kde 只随 Plasma 桌面(catalog 叶子)安装 ——
+        # 基线引入它会拖出 plasma-workspace 闭包, 在目标机留下残缺的
+        # plasma.desktop 会话, SDDM 选中即黑屏无面板(COSMIC 实测复现)。
+        self.assertIn("xdg-desktop-portal-kde", live)
+        self.assertNotIn("xdg-desktop-portal-kde", target)
 
     def test_default_browser_policy_keeps_only_firefox_offline(self):
         packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())

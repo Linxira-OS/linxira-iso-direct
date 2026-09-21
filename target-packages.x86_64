@@ -47,7 +47,6 @@ sudo
 wireplumber
 wireguard-tools
 xdg-desktop-portal
-xdg-desktop-portal-kde
 zram-generator
 syslinux
 accountsservice

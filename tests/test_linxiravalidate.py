@@ -364,6 +364,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
         self.assertIn("sddm", queried)
         self.assertNotIn("kinfocenter", queried)
         self.assertNotIn("plasma-systemmonitor", queried)
+        self.assertNotIn("xdg-desktop-portal-kde", queried)
         self.assertIsNotNone(result)
         self.assertIn("missing file: /usr/share/wayland-sessions/cosmic.desktop", result[1])
         self.assertNotIn("plasma.desktop", result[1])
@@ -373,6 +374,8 @@ class InstalledSystemValidationTests(unittest.TestCase):
         result = self._run_validator(["desktop-plasma"], queried)
         self.assertIn("kinfocenter", queried)
         self.assertIn("plasma-systemmonitor", queried)
+        self.assertIn("xdg-desktop-portal-kde", queried)
+        self.assertIn("wireplumber", queried)
         self.assertIsNotNone(result)
         self.assertIn("missing file: /usr/share/wayland-sessions/plasma.desktop", result[1])
 

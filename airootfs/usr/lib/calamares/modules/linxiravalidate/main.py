@@ -393,14 +393,18 @@ def run():
         "linxira-welcome",
         "wireplumber",
         "xdg-desktop-portal",
-        "xdg-desktop-portal-kde",
     )
     # 2026-08-13: 服务器(无桌面)模式不要求 sddm/桌面 session; 最小服务器同理
     if desktop not in SERVER_DESKTOPS:
         required_packages = required_packages + ("sddm",)
-    # 2026-09-21: kinfocenter/plasma-systemmonitor 只随 Plasma 桌面安装, 基线不含
+    # 2026-09-21: KDE 专属件只随 Plasma 桌面安装 —— 基线的 xdg-desktop-portal-kde
+    # 会拖出 plasma-workspace 闭包, 留下残缺 plasma.desktop 会话(SDDM 选中即黑屏)
     if desktop == "desktop-plasma":
-        required_packages = required_packages + ("kinfocenter", "plasma-systemmonitor")
+        required_packages = required_packages + (
+            "kinfocenter",
+            "plasma-systemmonitor",
+            "xdg-desktop-portal-kde",
+        )
     if bootloader_package:
         required_packages = required_packages + (bootloader_package,)
     for package in required_packages:
