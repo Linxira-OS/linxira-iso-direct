@@ -1104,8 +1104,23 @@ def run():
     except (OSError, ValueError) as error:
         return "Target configuration could not be finalized", str(error)
 
+    # 2026-09-21 产品决策: 中文安装 -> 国内镜像优先 + Flathub 国内源预置;
+    # 与在线包是否存在无关(同样影响安装后用户自己的 pacman/flatpak 使用)。
+    if (installer_locale or "").startswith("zh"):
+        mirrorlist_path = Path(root) / "etc/pacman.d/mirrorlist"
+        mirrorlist_path.write_text(
+            "\n".join("Server = " + s for s in FALLBACK_MIRRORS) + "\n",
+            encoding="utf-8",
+        )
+        remote_dir = Path(root) / "etc/flatpak/remotes.d"
+        remote_dir.mkdir(parents=True, exist_ok=True)
+        remote_repo = Path("/etc/calamares/flatpak/flathub.flatpakrepo")
+        if remote_repo.is_file():
+            shutil.copyfile(remote_repo, remote_dir / "flathub.flatpakrepo")
+
     if result["onlinePackages"]:
-        _rank_target_mirrors(root, mirror_rank_timeout)
+        if not (installer_locale or "").startswith("zh"):
+            _rank_target_mirrors(root, mirror_rank_timeout)
         reachable = _filter_reachable_mirrors(root, online_connect_timeout)
         if not reachable:
             libcalamares.utils.warning(
