@@ -289,6 +289,111 @@ class InstalledSystemValidationTests(unittest.TestCase):
         ):
             self.assertIn(value, source)
 
+    def _run_validator(self, selected, queried, receipt_overrides=None):
+        with tempfile.TemporaryDirectory() as temporary_root:
+            root = Path(temporary_root)
+            catalog_path = root / "usr/share/linxira/catalog/catalog-v3.json"
+            catalog_path.parent.mkdir(parents=True)
+            catalog_path.write_text(json.dumps({
+                "catalogVersion": 3,
+                "release": "test",
+                "desktops": [{
+                    "id": selected[0],
+                    "provider": "pacman",
+                    "source": "arch",
+                    "artifact": {"type": "package", "ids": []},
+                }],
+                "applications": [],
+                "components": [],
+                "operations": [],
+            }), encoding="utf-8")
+            receipt = self.receipt(selected)
+            receipt["catalogSha256"] = hashlib.sha256(catalog_path.read_bytes()).hexdigest()
+            receipt["selectionDocument"]["catalogSha256"] = receipt["catalogSha256"]
+            receipt["catalogRelease"] = "test"
+            receipt["satisfiedItems"] = list(selected)
+            receipt["pendingItems"] = []
+            receipt["installedItems"] = list(selected)
+            receipt["deferredItems"] = []
+            receipt["itemStatuses"] = [
+                {"id": leaf_id, "status": "installed"} for leaf_id in selected
+            ]
+            receipt["installedSelectedPackages"] = []
+            receipt.update(receipt_overrides or {})
+            receipt_path = root / "var/lib/linxira/installer-selection.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+            versions = {
+                "linxira-hwd-detector": "1.23.0-2",
+                "linxira-components": "0.7.0-5",
+                "linxira-hardware-driver-manager": "0.4.0-3",
+            }
+            globalstore = {
+                "rootMountPoint": str(root),
+                "packagechooser_bootloader": "grub",
+            }
+            with mock.patch("os.path.ismount", return_value=True), \
+                    mock.patch.object(
+                        linxiravalidate.libcalamares,
+                        "globalstorage",
+                        types.SimpleNamespace(value=globalstore.get),
+                        create=True,
+                    ), \
+                    mock.patch.object(
+                        linxiravalidate,
+                        "_package_installed",
+                        side_effect=lambda root, package: queried.append(package) or True,
+                    ), \
+                    mock.patch.object(
+                        linxiravalidate,
+                        "_package_or_group_installed",
+                        return_value=True,
+                    ), \
+                    mock.patch.object(
+                        linxiravalidate,
+                        "_package_version",
+                        side_effect=lambda root, package: versions[package],
+                    ):
+                return linxiravalidate.run()
+
+    def test_cosmic_selection_does_not_require_plasma_exclusive_packages(self):
+        queried = []
+        result = self._run_validator(["desktop-cosmic"], queried)
+        self.assertIn("shelly", queried)
+        self.assertIn("sddm", queried)
+        self.assertNotIn("kinfocenter", queried)
+        self.assertNotIn("plasma-systemmonitor", queried)
+        self.assertIsNotNone(result)
+        self.assertIn("missing file: /usr/share/wayland-sessions/cosmic.desktop", result[1])
+        self.assertNotIn("plasma.desktop", result[1])
+
+    def test_plasma_selection_requires_plasma_exclusive_packages(self):
+        queried = []
+        result = self._run_validator(["desktop-plasma"], queried)
+        self.assertIn("kinfocenter", queried)
+        self.assertIn("plasma-systemmonitor", queried)
+        self.assertIsNotNone(result)
+        self.assertIn("missing file: /usr/share/wayland-sessions/plasma.desktop", result[1])
+
+    def test_minimal_baseline_uses_slim_requirement_set(self):
+        queried = []
+        result = self._run_validator(
+            ["desktop-server-minimal"],
+            queried,
+            receipt_overrides={"minimalBaseline": True},
+        )
+        self.assertIn("base", queried)
+        self.assertIn("linux-lts", queried)
+        self.assertIn("grub", queried)
+        self.assertNotIn("shelly", queried)
+        self.assertNotIn("linxira-welcome", queried)
+        self.assertNotIn("sddm", queried)
+        self.assertIsNotNone(result)
+        self.assertIn("missing file: /etc/fstab", result[1])
+        self.assertNotIn("/usr/bin/linxira-config", result[1])
+
+
     def test_validator_rejects_arch_branded_grub_menu(self):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn('GRUB_DISTRIBUTOR="Linxira OS"', source)

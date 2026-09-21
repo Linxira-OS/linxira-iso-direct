@@ -5,6 +5,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = (
@@ -12,7 +13,8 @@ MODULE_PATH = (
     / "airootfs/usr/lib/calamares/modules/linxirasession/main.py"
 )
 libcalamares = types.ModuleType("libcalamares")
-libcalamares.globalstorage = types.SimpleNamespace(value=lambda key: None)
+GLOBALSTORE = {}
+libcalamares.globalstorage = types.SimpleNamespace(value=GLOBALSTORE.get)
 libcalamares.job = types.SimpleNamespace(setprogress=lambda value: None)
 sys.modules["libcalamares"] = libcalamares
 spec = importlib.util.spec_from_file_location("linxirasession", MODULE_PATH)
@@ -100,6 +102,21 @@ class DesktopSessionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "unsupported desktop session"):
                 linxirasession._write_sddm_state(directory, "gdm.desktop")
+
+    def test_server_desktops_skip_sddm_session_configuration(self):
+        for desktop in ("desktop-server", "desktop-server-minimal"):
+            with self.subTest(desktop=desktop), tempfile.TemporaryDirectory() as directory:
+                receipt = Path(directory) / "var/lib/linxira/installer-selection.json"
+                receipt.parent.mkdir(parents=True)
+                receipt.write_text(json.dumps(self.receipt([desktop])), encoding="utf-8")
+                self.assertIsNone(linxirasession._selected_session(directory))
+                GLOBALSTORE["rootMountPoint"] = str(directory)
+                try:
+                    with mock.patch("os.path.ismount", return_value=True):
+                        self.assertIsNone(linxirasession.run())
+                finally:
+                    GLOBALSTORE.clear()
+                self.assertFalse((Path(directory) / "var/lib/sddm/state.conf").exists())
 
 
 if __name__ == "__main__":

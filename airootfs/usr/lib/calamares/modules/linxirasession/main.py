@@ -16,6 +16,10 @@ DESKTOP_SESSIONS = {
 }
 
 
+# 2026-09-21: 服务器两种模式无桌面/显示管理器 —— 跳过 SDDM 会话配置
+SERVER_DESKTOPS = {"desktop-server", "desktop-server-minimal"}
+
+
 def pretty_name():
     return "Configure the default desktop session"
 
@@ -47,10 +51,10 @@ def _selected_session(root):
         or selection.get("selectedBundleIds") != receipt.get("selectedBundleIds")
     ):
         raise ValueError("installer receipt provenance is missing or inconsistent")
-    selected = set(selection["selectedLeafIds"]) & set(DESKTOP_SESSIONS)
+    selected = set(selection["selectedLeafIds"]) & (set(DESKTOP_SESSIONS) | SERVER_DESKTOPS)
     if len(selected) != 1:
         raise ValueError("installer receipt must select exactly one desktop")
-    return DESKTOP_SESSIONS[selected.pop()]
+    return DESKTOP_SESSIONS.get(selected.pop())
 
 
 def _write_sddm_state(root, session):
@@ -69,7 +73,9 @@ def run():
     if not root or not os.path.ismount(root):
         return "Target is not mounted", "The target root mount is unavailable."
     try:
-        _write_sddm_state(root, _selected_session(root))
+        session = _selected_session(root)
+        if session is not None:
+            _write_sddm_state(root, session)
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
         return "Default desktop session could not be configured", str(error)
     libcalamares.job.setprogress(1.0)

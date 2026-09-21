@@ -71,6 +71,9 @@ DESKTOP_REQUIREMENTS = {
 }
 
 
+SERVER_DESKTOPS = {"desktop-server", "desktop-server-minimal"}
+
+
 def pretty_name():
     return "Validate installed system"
 
@@ -245,6 +248,112 @@ def _package_version(root, package):
     return fields[1] if result.returncode == 0 and len(fields) == 2 and fields[0] == package else None
 
 
+def _minimal_baseline_selected(root):
+    receipt_path = Path(root) / "var/lib/linxira/installer-selection.json"
+    receipt = json.loads(
+        receipt_path.read_text(encoding="utf-8"),
+        object_pairs_hook=_reject_duplicate_keys,
+    )
+    return receipt.get("minimalBaseline") is True
+
+
+def _require_paths(root, paths, failures):
+    for path in paths:
+        target_path = _target_path(root, path)
+        if not os.path.isfile(target_path):
+            failures.append("missing file: " + path)
+        elif path.startswith("/boot/initramfs-") and os.path.getsize(target_path) == 0:
+            failures.append("empty initramfs: " + path)
+
+
+def _shared_target_checks(root, failures):
+    for path in _obsolete_initcpio_configs(root):
+        failures.append("obsolete initramfs module in: " + path)
+
+    fstab_path = _target_path(root, "/etc/fstab")
+    if os.path.isfile(fstab_path):
+        with open(fstab_path, encoding="utf-8") as fstab:
+            contents = fstab.read()
+        for subvolume in ("@", "@home", "@log", "@cache", "@tmp", "@swap"):
+            if "subvol=/" + subvolume not in contents and "subvol=" + subvolume not in contents:
+                failures.append("fstab missing subvolume: " + subvolume)
+
+    passwd_path = _target_path(root, "/etc/passwd")
+    if os.path.isfile(passwd_path):
+        with open(passwd_path, encoding="utf-8") as passwd:
+            if any(line.startswith("installer:") for line in passwd):
+                failures.append("live installer user retained")
+
+    pacman_path = _target_path(root, "/etc/pacman.conf")
+    if os.path.isfile(pacman_path):
+        with open(pacman_path, encoding="utf-8") as pacman_conf:
+            if "linxira-offline" in pacman_conf.read():
+                failures.append("offline repository retained")
+
+    grub_default_path = _target_path(root, "/etc/default/grub")
+    if os.path.isfile(grub_default_path):
+        contents = Path(grub_default_path).read_text(encoding="utf-8")
+        if 'GRUB_DISTRIBUTOR="Linxira OS"' not in contents:
+            failures.append("GRUB distributor is not branded as Linxira OS")
+    else:
+        failures.append("missing file: /etc/default/grub")
+
+    grub_cfg_path = _target_path(root, "/boot/grub/grub.cfg")
+    if os.path.isfile(grub_cfg_path):
+        contents = Path(grub_cfg_path).read_text(encoding="utf-8", errors="replace")
+        if "menuentry 'Arch Linux'" in contents or "Advanced options for Arch Linux" in contents:
+            failures.append("GRUB menu still uses Arch Linux branding")
+        if "Linxira OS" not in contents:
+            failures.append("GRUB menu does not contain Linxira OS branding")
+
+    live_only_paths = (
+        "/etc/calamares",
+        "/etc/xdg/autostart/linxira-installer.desktop",
+        "/etc/sddm.conf.d/10-linxira-live.conf",
+        "/etc/polkit-1/rules.d/49-linxira-installer.rules",
+        "/usr/local/bin/linxira-installer-shell",
+        "/usr/local/bin/linxira-live-session",
+        "/usr/share/wayland-sessions/linxira-live.desktop",
+        "/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf",
+    )
+    for path in live_only_paths:
+        if os.path.exists(_target_path(root, path)):
+            failures.append("live installer content retained: " + path)
+
+
+BOOTLOADER_PACKAGES = {"grub": "grub", "systemd-boot": "systemd-boot", "refind": "refind"}
+BOOTLOADER_PATHS = {
+    "grub": ("/boot/grub/grub.cfg",),
+    "systemd-boot": ("/boot/loader/loader.conf",),
+    "refind": ("/boot/EFI/refind/refind.conf",),
+}
+
+
+def _validate_minimal_system(root, bootloader, bootloader_package):
+    # 2026-09-21: 「服务器 · 纯 Arch 最小安装」基线仅 13 包, 无 Linxira 工具链与
+    # 桌面管线 —— 不适用标准校验清单, 只校验内核/引导与共享目标系统不变量。
+    failures = []
+    required_packages = ("base", "linux", "linux-lts")
+    if bootloader_package:
+        required_packages = required_packages + (bootloader_package,)
+    for package in required_packages:
+        if not _package_installed(root, package):
+            failures.append("missing package: " + package)
+    required_paths = (
+        "/boot/initramfs-linux.img",
+        "/boot/initramfs-linux-lts.img",
+        "/boot/vmlinuz-linux",
+        "/boot/vmlinuz-linux-lts",
+        "/etc/fstab",
+    ) + BOOTLOADER_PATHS.get(bootloader, BOOTLOADER_PATHS["grub"])
+    _require_paths(root, required_paths, failures)
+    _shared_target_checks(root, failures)
+    if failures:
+        return "Installed system validation failed", "\n".join(failures)
+    libcalamares.job.setprogress(1.0)
+    return None
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     failures = []
@@ -257,6 +366,13 @@ def run():
         selected_packages = tuple(selected_packages) + tuple(_selected_package_requirements(root))
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
         return "Installed system validation failed", "invalid installer selection receipt: " + str(error)
+
+    # 引导程序按用户选择校验(grub/systemd-boot/refind), 不再硬编码 grub
+    bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
+    bootloader_package = BOOTLOADER_PACKAGES.get(bootloader)
+    # 2026-09-21: 「服务器 · 纯 Arch 最小安装」走独立轻量校验清单
+    if _minimal_baseline_selected(root):
+        return _validate_minimal_system(root, bootloader, bootloader_package)
 
     required_packages = (
         "shelly",
@@ -275,18 +391,16 @@ def run():
         "linxira-package-center",
         "linxira-update",
         "linxira-welcome",
-        "kinfocenter",
-        "plasma-systemmonitor",
         "wireplumber",
         "xdg-desktop-portal",
         "xdg-desktop-portal-kde",
     )
-    # 引导程序按用户选择校验(grub/systemd-boot/refind), 不再硬编码 grub
-    bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
-    bootloader_package = {"grub": "grub", "systemd-boot": "systemd-boot", "refind": "refind"}.get(bootloader)
-    # 2026-08-13: 服务器(无桌面)模式不要求 sddm/桌面 session
-    if desktop != "desktop-server":
+    # 2026-08-13: 服务器(无桌面)模式不要求 sddm/桌面 session; 最小服务器同理
+    if desktop not in SERVER_DESKTOPS:
         required_packages = required_packages + ("sddm",)
+    # 2026-09-21: kinfocenter/plasma-systemmonitor 只随 Plasma 桌面安装, 基线不含
+    if desktop == "desktop-plasma":
+        required_packages = required_packages + ("kinfocenter", "plasma-systemmonitor")
     if bootloader_package:
         required_packages = required_packages + (bootloader_package,)
     for package in required_packages:
@@ -348,30 +462,13 @@ def run():
         "/usr/share/linxira/welcome/i18n/zh_CN.json",
         "/var/lib/linxira/installer-selection.json",
     )
-    if desktop != "desktop-server":
+    if desktop not in SERVER_DESKTOPS:
         required_paths = required_paths + (
-            "/usr/share/wayland-sessions/plasma.desktop",
             "/usr/share/wayland-sessions/" + selected_session,
         )
-    # 引导相关路径按所选引导校验
-    bootloader_paths = {
-        "grub": ("/boot/grub/grub.cfg",),
-        "systemd-boot": ("/boot/loader/loader.conf",),
-        "refind": ("/boot/EFI/refind/refind.conf",),
-    }
-    for path in bootloader_paths.get(bootloader, bootloader_paths["grub"]):
-        required_paths = required_paths + (path,)
-    for path in required_paths:
-        target_path = _target_path(root, path)
-        if not os.path.isfile(target_path):
-            failures.append("missing file: " + path)
-        elif path.startswith("/boot/initramfs-") and os.path.getsize(target_path) == 0:
-            failures.append("empty initramfs: " + path)
-
-    for path in _obsolete_initcpio_configs(root):
-        failures.append("obsolete initramfs module in: " + path)
-
-    if desktop != "desktop-server":
+    required_paths = required_paths + BOOTLOADER_PATHS.get(bootloader, BOOTLOADER_PATHS["grub"])
+    _require_paths(root, required_paths, failures)
+    if desktop not in SERVER_DESKTOPS:
         state_path = Path(root) / "var/lib/sddm/state.conf"
         expected_state = "[Last]\nSession=" + selected_session + "\n"
         if not state_path.is_file():
@@ -385,56 +482,7 @@ def run():
         elif os.readlink(display_manager) != "/usr/lib/systemd/system/sddm.service":
             failures.append("display-manager.service does not point to sddm.service")
 
-    fstab_path = _target_path(root, "/etc/fstab")
-    if os.path.isfile(fstab_path):
-        with open(fstab_path, encoding="utf-8") as fstab:
-            contents = fstab.read()
-        for subvolume in ("@", "@home", "@log", "@cache", "@tmp", "@swap"):
-            if "subvol=/" + subvolume not in contents and "subvol=" + subvolume not in contents:
-                failures.append("fstab missing subvolume: " + subvolume)
-
-    passwd_path = _target_path(root, "/etc/passwd")
-    if os.path.isfile(passwd_path):
-        with open(passwd_path, encoding="utf-8") as passwd:
-            if any(line.startswith("installer:") for line in passwd):
-                failures.append("live installer user retained")
-
-    pacman_path = _target_path(root, "/etc/pacman.conf")
-    if os.path.isfile(pacman_path):
-        with open(pacman_path, encoding="utf-8") as pacman_conf:
-            if "linxira-offline" in pacman_conf.read():
-                failures.append("offline repository retained")
-
-    grub_default_path = _target_path(root, "/etc/default/grub")
-    if os.path.isfile(grub_default_path):
-        contents = Path(grub_default_path).read_text(encoding="utf-8")
-        if 'GRUB_DISTRIBUTOR="Linxira OS"' not in contents:
-            failures.append("GRUB distributor is not branded as Linxira OS")
-    else:
-        failures.append("missing file: /etc/default/grub")
-
-    grub_cfg_path = _target_path(root, "/boot/grub/grub.cfg")
-    if os.path.isfile(grub_cfg_path):
-        contents = Path(grub_cfg_path).read_text(encoding="utf-8", errors="replace")
-        if "menuentry 'Arch Linux'" in contents or "Advanced options for Arch Linux" in contents:
-            failures.append("GRUB menu still uses Arch Linux branding")
-        if "Linxira OS" not in contents:
-            failures.append("GRUB menu does not contain Linxira OS branding")
-
-    live_only_paths = (
-        "/etc/calamares",
-        "/etc/xdg/autostart/linxira-installer.desktop",
-        "/etc/sddm.conf.d/10-linxira-live.conf",
-        "/etc/polkit-1/rules.d/49-linxira-installer.rules",
-        "/usr/local/bin/linxira-installer-shell",
-        "/usr/local/bin/linxira-live-session",
-        "/usr/share/wayland-sessions/linxira-live.desktop",
-        "/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf",
-    )
-    for path in live_only_paths:
-        if os.path.exists(_target_path(root, path)):
-            failures.append("live installer content retained: " + path)
-
+    _shared_target_checks(root, failures)
     if failures:
         return "Installed system validation failed", "\n".join(failures)
 
