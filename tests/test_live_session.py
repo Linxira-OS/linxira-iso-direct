@@ -100,7 +100,7 @@ class LiveSessionTests(unittest.TestCase):
     def test_welcome_has_fixed_launchers_and_no_privileged_shell(self):
         script = WELCOME.read_text(encoding="utf-8")
         self.assertIn('"installer": (LIVE_INSTALLER, [])', script)
-        self.assertIn("QProcess.startDetached(executable, arguments)", script)
+        self.assertIn("QProcess.startDetached(executable, list(arguments))", script)
         for forbidden in ("shell=True", "bash -c", "sudo", "pkexec"):
             self.assertNotIn(forbidden, script)
 
