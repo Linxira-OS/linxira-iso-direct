@@ -108,6 +108,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
                 "pop-icon-theme",
                 "sddm",
                 "xdg-desktop-portal-cosmic",
+                "vulkan-swrast",
             ],
         )
         catalog = json.loads(

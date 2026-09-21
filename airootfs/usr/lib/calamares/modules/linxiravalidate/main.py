@@ -45,6 +45,7 @@ DESKTOP_REQUIREMENTS = {
             "pop-icon-theme",
             "sddm",
             "xdg-desktop-portal-cosmic",
+            "vulkan-swrast",
         ),
     ),
     "desktop-plasma": ("plasma.desktop", ()),
