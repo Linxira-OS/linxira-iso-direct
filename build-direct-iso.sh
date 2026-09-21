@@ -411,6 +411,12 @@ target_packages+=(pipewire-jack qt6-multimedia-ffmpeg mkinitcpio tesseract-data-
 offline_repo="${profile_copy}/airootfs/opt/linxira/offline-repo/x86_64"
 package_cache="${build_parent}/.linxira-package-cache"
 mkdir -p "$package_cache"
+# 2026-09-21: 播种已验证的 fetch 产物 —— 闭包下载对 16 个自研包不再走网络
+# (构建机网络抖动时反复产出截断包), pacman 仅对缺失的依赖走镜像。
+for fetched in "${profile_dir}"/.linxira-packages/*.pkg.tar.zst; do
+  [ -e "$fetched" ] || continue
+  cp -f "$fetched" "${package_cache}/$(basename "$fetched")"
+done
 pacman_db=$(mktemp -d "${build_parent}/.linxira-pacman-db.XXXXXX")
 mkdir -p "$offline_repo" "${pacman_db}/local"
 printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox \
