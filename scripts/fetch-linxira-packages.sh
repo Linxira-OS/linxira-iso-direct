@@ -88,12 +88,16 @@ printf 'Downloading %s ...\n' "$db_url" >&2
 curl -fsSL "$db_url" -o "$tmpdir/linxira.db.tar.zst"
 bsdtar -xf "$tmpdir/linxira.db.tar.zst" -C "$tmpdir"
 
-declare -A available
+declare -A available available_csize available_sha256
 for desc in "$tmpdir"/*/desc; do
   [[ -f "$desc" ]] || continue
   pkgname=$(awk '/^%NAME%$/{getline; print; exit}' "$desc")
   filename=$(awk '/^%FILENAME%$/{getline; print; exit}' "$desc")
+  csize=$(awk '/^%CSIZE%$/{getline; print; exit}' "$desc")
+  sha256=$(awk '/^%SHA256SUM%$/{getline; print; exit}' "$desc")
   [[ -n "$pkgname" && -n "$filename" ]] && available[$pkgname]=$filename
+  available_csize[$pkgname]=$csize
+  available_sha256[$pkgname]=$sha256
 done
 
 missing=()
@@ -104,8 +108,25 @@ for pkg in "${packages[@]}"; do
     continue
   fi
   url="${repo}/${arch}/${filename}"
-  printf 'Fetching %s -> %s\n' "$pkg" "$filename" >&2
-  curl -fsSL "$url" -o "${output_dir}/${filename}"
+  expected_size=${available_csize[$pkg]:-0}
+  expected_sha=${available_sha256[$pkg]:-}
+  # 2026-09-21: 镜像网络抖动会产出静默截断包, 逐包校验大小与 sha256, 重试三次。
+  ok=0
+  for attempt in 1 2 3; do
+    printf 'Fetching %s -> %s (attempt %d)\n' "$pkg" "$filename" "$attempt" >&2
+    curl -fsSL --retry 2 --retry-delay 2 "$url" -o "${output_dir}/${filename}.part" && \
+      [[ "$(stat -c %s "${output_dir}/${filename}.part" 2>/dev/null)" == "$expected_size" ]] && \
+      [[ "$(sha256sum "${output_dir}/${filename}.part" 2>/dev/null | awk '{print $1}')" == "$expected_sha" ]] && {
+        mv -f "${output_dir}/${filename}.part" "${output_dir}/${filename}"
+        ok=1
+        break
+      }
+    rm -f "${output_dir}/${filename}.part"
+    sleep 2
+  done
+  if [[ $ok -ne 1 ]]; then
+    missing+=("$pkg (download failed checksum verification)")
+  fi
 done
 
 if [[ ${#missing[@]} -gt 0 ]]; then
