@@ -74,8 +74,8 @@ class DesktopSessionTests(unittest.TestCase):
             session = linxirasession._selected_session(root)
             linxirasession._write_sddm_state(root, session)
             state = (root / "var/lib/sddm/state.conf").read_text(encoding="utf-8")
-        self.assertEqual(session, "cosmic-session.desktop")
-        self.assertEqual(state, "[Last]\nSession=cosmic-session.desktop\n")
+        self.assertEqual(session, "cosmic.desktop")
+        self.assertEqual(state, "[Last]\nSession=cosmic.desktop\n")
 
     def test_missing_or_multiple_desktops_fail_closed(self):
         for selected in ([], ["desktop-plasma", "desktop-cosmic"], ["desktop-plasma", "desktop-gnome"]):

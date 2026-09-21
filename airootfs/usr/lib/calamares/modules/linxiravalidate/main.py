@@ -15,8 +15,9 @@ OBSOLETE_INITCPIO_MODULE = re.compile(
 )
 DESKTOP_REQUIREMENTS = {
     # 2026-09-20: COSMIC 第二个一等桌面 —— 逐包校验, 与 catalog artifact ids 对齐。
+    # 2026-09-21 修复: 会话文件实为 cosmic.desktop(Arch cosmic-session 包)。
     "desktop-cosmic": (
-        "cosmic-session.desktop",
+        "cosmic.desktop",
         (
             "cosmic-app-library",
             "cosmic-applets",

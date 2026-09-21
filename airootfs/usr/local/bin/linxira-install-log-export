@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# 安装失败/异常时快速导出并上传安装日志(live 会话内运行, 自动提权)。
+# 用法: linxira-install-log-export        # 收集 + 上传, 返回分享链接
+#       linxira-install-log-export --no-upload   # 只收集到本地
+set -u
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo bash "$0" "$@"
+fi
+
+out="/root/linxira-install-logs-$(date +%Y%m%d-%H%M%S).txt"
+{
+    echo "=== Linxira OS installation diagnostic ==="
+    echo "=== date: $(date -Is) | kernel: $(uname -r) ==="
+    echo
+    echo "─── calamares installer log (tail) ───"
+    f=""
+    for f in /root/.cache/calamares/*.log /home/*/.cache/calamares/*.log /var/log/installation.log /var/log/calamares*.log; do
+        if [ -f "$f" ]; then
+            echo "--- $f (last 500 lines) ---"
+            tail -n 500 "$f" 2>/dev/null
+        fi
+    done
+    echo
+    echo "─── target installer receipt (if mounted) ───"
+    for r in /mnt/var/lib/linxira/installer-selection.json \
+             /tmp/calamares-root/var/lib/linxira/installer-selection.json; do
+        if [ -f "$r" ]; then
+            echo "--- $r ---"
+            cat "$r"
+        fi
+    done
+    echo
+    echo "─── pacman.log (tail) ───"
+    tail -n 300 /var/log/pacman.log 2>/dev/null
+    echo
+    echo "─── journal errors (this boot, tail) ───"
+    journalctl -b -p err --no-pager 2>/dev/null | tail -n 200
+    echo
+    echo "─── disks ───"
+    lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT 2>/dev/null
+} > "$out"
+chmod a+r -- "$out" 2>/dev/null
+echo "已收集安装日志: $out"
+
+if [ "${1:-}" = "--no-upload" ]; then
+    echo "按要求仅保存在本地; 把该文件内容发给我们即可。"
+    exit 0
+fi
+
+echo "上传中(0x0.st, 保留约30天)..."
+url=$(curl -fsS --max-time 90 -A "linxira-install-log-export" -F "file=@${out}" https://0x0.st 2>/dev/null)
+if [ -n "$url" ]; then
+    echo "上传成功, 把下面的链接发给我们:"
+    echo "  $url"
+else
+    echo "上传失败(可能无网络): 请把文件 $out 的内容直接发给我们。"
+fi

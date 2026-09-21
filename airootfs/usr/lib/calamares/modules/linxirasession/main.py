@@ -8,7 +8,9 @@ import libcalamares
 
 
 DESKTOP_SESSIONS = {
-    "desktop-cosmic": "cosmic-session.desktop",
+    # 2026-09-21 修复: Arch cosmic-session 包的会话文件是 cosmic.desktop
+    # (wayland-sessions 下无 cosmic-session.desktop, 安装曾因此失败)
+    "desktop-cosmic": "cosmic.desktop",
     "desktop-gnome": "gnome.desktop",
     "desktop-plasma": "plasma.desktop",
 }

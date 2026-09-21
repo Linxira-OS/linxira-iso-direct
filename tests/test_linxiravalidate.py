@@ -76,8 +76,9 @@ class InstalledSystemValidationTests(unittest.TestCase):
     def test_cosmic_first_class_desktop_requirements_match_catalog(self):
         # 2026-09-20: COSMIC 第二个一等桌面 —— 会话文件 + 逐包校验集合,
         # 与 catalog desktop-cosmic artifact ids 完全一致。
+        # 2026-09-21 修复: Arch cosmic-session 包的会话文件是 cosmic.desktop。
         session, packages = linxiravalidate.DESKTOP_REQUIREMENTS["desktop-cosmic"]
-        self.assertEqual(session, "cosmic-session.desktop")
+        self.assertEqual(session, "cosmic.desktop")
         self.assertEqual(
             list(packages),
             [
