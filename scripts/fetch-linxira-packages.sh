@@ -37,6 +37,7 @@ default_packages=(
   linxira-recovery-diagnostics
   linxira-update
   linxira-welcome
+  linxira-wiki
   linxira-keyring
 )
 
