@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -22,6 +22,7 @@ recovery_diagnostics_package=''
 update_package=''
 welcome_package=''
 keyring_package=''
+wiki_package=''
 plymouth_theme_directory=''
 output_dir="${profile_dir}/out"
 
@@ -107,6 +108,11 @@ while [[ $# -gt 0 ]]; do
       keyring_package=$2
       shift 2
       ;;
+    --wiki-package)
+      [[ $# -ge 2 ]] || usage
+      wiki_package=$2
+      shift 2
+      ;;
     --plymouth-theme-directory)
       [[ $# -ge 2 ]] || usage
       plymouth_theme_directory=$2
@@ -144,6 +150,7 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
       -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
       -z "$keyring_package" || ! -f "$keyring_package" ||
+      -z "$wiki_package" || ! -f "$wiki_package" ||
       -z "$plymouth_theme_directory" ||
       ! -f "$plymouth_theme_directory/linxira.plymouth" ||
       ! -f "$plymouth_theme_directory/watermark.png" ||
@@ -208,6 +215,7 @@ recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
 keyring_package=$(realpath "$keyring_package")
+wiki_package=$(realpath "$wiki_package")
 plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
 validate_package_artifact "$shelly_package" shelly
 validate_package_artifact "$calamares_package" calamares \
@@ -240,6 +248,11 @@ validate_package_artifact "$components_package" linxira-components \
   usr/share/dbus-1/system-services/org.linxira.Components1.service \
   usr/share/polkit-1/actions/org.linxira.components.policy \
   usr/share/licenses/linxira-components/LICENSE
+validate_package_artifact "$wiki_package" linxira-wiki \
+  usr/bin/linxira-wiki \
+  usr/share/linxira/wiki/ai/manifest.json \
+  usr/share/linxira/wiki/docs/index.md \
+  usr/share/licenses/linxira-wiki/LICENSE
 validate_package_version "$components_package" 0.8.0-1
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
@@ -366,6 +379,7 @@ package_artifacts=(
   "$update_package"
   "$welcome_package"
   "$keyring_package"
+  "$wiki_package"
 )
 repo_artifacts=()
 for artifact in "${package_artifacts[@]}"; do
