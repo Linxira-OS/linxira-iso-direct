@@ -325,10 +325,18 @@ def _shared_target_checks(root, failures):
 # 2026-09-27: Arch 没有名为 systemd-boot 的包 —— 它由 systemd 包提供。
 # 此前映射到不存在的包名, 选 systemd-boot 的机器会在装机校验阶段误报缺包。
 BOOTLOADER_PACKAGES = {"grub": "grub", "systemd-boot": "systemd", "refind": "refind"}
+# 2026-09-28: ESP 恒为 /boot/efi(见 partition.conf 顶部 efi 段; 此前的
+# bootloaderOverrides 是 CachyOS fork 键, Arch 官方 calamares 不认识, 已删)。
+# 上游 bootloader 模块(v3.3.14)的真实落点:
+#   grub          → grub.cfg 在 /boot/grub(内核与 /boot 同在 root 分区)
+#   systemd-boot  → bootctl/kernel-install 写 /boot/efi/loader/loader.conf,
+#                   内核经 kernel-install 拷入 ESP
+#   refind        → refind-install 写 /boot/efi/EFI/refind/refind.conf,
+#                   /boot/refind_linux.conf 生成在内核旁(root 分区)
 BOOTLOADER_PATHS = {
     "grub": ("/boot/grub/grub.cfg",),
-    "systemd-boot": ("/boot/loader/loader.conf",),
-    "refind": ("/boot/EFI/refind/refind.conf",),
+    "systemd-boot": ("/boot/efi/loader/loader.conf",),
+    "refind": ("/boot/efi/EFI/refind/refind.conf",),
 }
 
 

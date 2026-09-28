@@ -144,5 +144,39 @@ class BootloaderPackageWiringTests(unittest.TestCase):
         self.assertEqual(linxiravalidate.BOOTLOADER_PACKAGES["refind"], "refind")
 
 
+class EfiSystemPartitionContractTests(unittest.TestCase):
+    # 2026-09-28 事故: bootloaderOverrides(CachyOS fork 键)在 Arch 官方
+    # calamares 里不存在, ESP 实际恒挂 /boot/efi, 而校验器按 /boot 找
+    # refind.conf —— 选 rEFInd 的装机在收尾校验必然失败。本组测试锁住
+    # "校验路径必须落在上游 bootloader 模块的真实落点上" 这条契约。
+
+    def test_validator_bootloader_paths_live_on_the_esp(self):
+        for bootloader, paths in linxiravalidate.BOOTLOADER_PATHS.items():
+            for path in paths:
+                self.assertTrue(
+                    path == "/boot/grub/grub.cfg" or path.startswith("/boot/efi/"),
+                    f"{bootloader}: {path} 既不是 grub 的 /boot/grub 路径, "
+                    "也不在 ESP(/boot/efi) 上 —— 与上游 bootloader 模块行为不符",
+                )
+
+    def test_partition_conf_has_no_dead_cachyos_keys(self):
+        import re
+
+        conf = (
+            Path(__file__).parents[1]
+            / "airootfs/etc/calamares/modules/partition.conf"
+        ).read_text(encoding="utf-8")
+        # 注释里可以提这个键名(事故考古); 作为配置项出现才算复活
+        self.assertIsNone(re.search(r"^bootloaderOverrides:", conf, re.MULTILINE))
+
+    def test_partition_conf_mounts_the_esp_at_boot_efi(self):
+        conf = (
+            Path(__file__).parents[1]
+            / "airootfs/etc/calamares/modules/partition.conf"
+        ).read_text(encoding="utf-8")
+        self.assertRegex(conf, r"mountPoint:\s*/boot/efi")
+        self.assertRegex(conf, r"recommendedSize:\s*1024MiB")
+
+
 if __name__ == "__main__":
     unittest.main()
