@@ -1,0 +1,30 @@
+#!/bin/bash
+# 清理上一次失败安装留下的现场, 让安装器可以原地重试。
+#
+# 背景(2026-09-28 用户实测): 安装失败后 Calamares 不会执行收尾的 umount,
+# 同一次 live 会话内重试时目标分区仍挂在 /tmp/calamares-root-* 下;
+# 擦盘建分区时设备 busy, 分区无法重建。本脚本在 partition 模块之前运行,
+# 把占用清干净。清理不到的东西按"不存在"处理, 永远不因此失败。
+set -u
+
+# 1) Calamares 历史目标挂载点( deepest-first, 自底向上卸载 )
+for mount_point in $(awk '$2 ~ /^\/tmp\/calamares-root-/ {print $2}' /proc/self/mounts | sort -r); do
+    umount -R "$mount_point" 2>/dev/null || umount -l "$mount_point" 2>/dev/null || true
+done
+
+# 2) 老版本安装器可能用过的 /target 挂载点
+for mount_point in $(awk '$2 ~ /^\/target(\/|$)/ {print $2}' /proc/self/mounts | sort -r); do
+    umount -R "$mount_point" 2>/dev/null || umount -l "$mount_point" 2>/dev/null || true
+done
+
+# 3) 残留 swap(擦盘时 swap 分区被占用是经典卡点)
+swapoff -a 2>/dev/null || true
+
+# 4) LVM / MD RAID / LUKS 残留
+vgchange -an 2>/dev/null || true
+mdadm --stop --scan 2>/dev/null || true
+while read -r name _; do
+    cryptsetup close "$name" 2>/dev/null || true
+done < <(lsblk -rno NAME,FSTYPE 2>/dev/null | awk '$2 == "crypto_LUKS" {print $1}')
+
+exit 0
