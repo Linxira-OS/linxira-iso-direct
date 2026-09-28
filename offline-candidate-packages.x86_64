@@ -50,3 +50,7 @@ systemsettings
 xdg-desktop-portal-cosmic
 xdg-desktop-portal-kde
 vulkan-swrast
+
+# 2026-09-27: 引导器候选 —— rEFInd 不在任何基线里, 但安装器提供该选项,
+# 必须随 ISO 附带才能离线安装(否则 refind-install 报 127)。
+refind

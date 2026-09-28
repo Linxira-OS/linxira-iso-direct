@@ -322,7 +322,9 @@ def _shared_target_checks(root, failures):
             failures.append("live installer content retained: " + path)
 
 
-BOOTLOADER_PACKAGES = {"grub": "grub", "systemd-boot": "systemd-boot", "refind": "refind"}
+# 2026-09-27: Arch 没有名为 systemd-boot 的包 —— 它由 systemd 包提供。
+# 此前映射到不存在的包名, 选 systemd-boot 的机器会在装机校验阶段误报缺包。
+BOOTLOADER_PACKAGES = {"grub": "grub", "systemd-boot": "systemd", "refind": "refind"}
 BOOTLOADER_PATHS = {
     "grub": ("/boot/grub/grub.cfg",),
     "systemd-boot": ("/boot/loader/loader.conf",),

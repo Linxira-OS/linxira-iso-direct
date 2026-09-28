@@ -28,6 +28,12 @@ INPUT_FIELDS = {
 SELECTION_SCHEMA = "org.linxira.component-selection.v1"
 PENDING_INSTALL_SCHEMA = "org.linxira.pending-install.v1"
 
+# 2026-09-27: 引导器选择驱动装包。refind 不在基线里, 选了才装(否则
+# bootloader 模块跑 refind-install 时报 127)。grub 常驻两种基线;
+# systemd-boot 由 systemd 包提供(基线必含), 无需追加。
+BOOTLOADER_PACKAGES = {"grub": "grub", "refind": "refind"}
+PENDING_INSTALL_SCHEMA = "org.linxira.pending-install.v1"
+
 # 2026-08-13: 官方镜像池对国内网络可能全部超时, 在线安装前追加的中国镜像 fallback
 # (与 airootfs 的 reflector 排名互补; 仅当官方池全部不可达时启用)
 FALLBACK_MIRRORS = [
@@ -1057,6 +1063,14 @@ def run():
         else:
             # fcitx5 预配置仅对标准基线有意义; 纯 Arch 最小安装无输入法包
             _configure_chinese_input_method(root, installer_locale)
+        # 2026-09-27: 按引导器选择补装包 —— 必须在最小基线切换之后追加,
+        # 否则纯 Arch 最小安装(基线整体替换)会把这个包丢掉。
+        bootloader_choice = str(
+            libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
+        )
+        bootloader_package = BOOTLOADER_PACKAGES.get(bootloader_choice)
+        if bootloader_package and bootloader_package not in baseline_packages:
+            baseline_packages.append(bootloader_package)
         retry_count = config.get("retryCount", 3)
         if type(retry_count) is not int or not 1 <= retry_count <= 5:
             raise ValueError("retryCount must be an integer from 1 through 5")
