@@ -24,7 +24,8 @@ set +e
 # 2026-09-28: 启动即清理上次失败安装的现场(目标挂载点占用会让分区页整体
 # 不可操作, 连下一步都进不去 —— 必须在任何页面渲染之前清)。与 calamares
 # 同一次 pkexec, 不产生额外授权弹窗; 清理失败不阻断安装。
-pkexec /bin/sh -c '/usr/local/bin/linxira-install-cleanup || true; exec /usr/bin/calamares' >>"$log" 2>&1
+# sh 直调 + 静默: 即便 overlay 权限丢失也只静默跳过, 不污染诊断日志
+pkexec /bin/sh -c 'sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares' >>"$log" 2>&1
 status=$?
 set -e
 

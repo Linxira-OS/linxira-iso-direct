@@ -23,6 +23,8 @@ file_permissions=(
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
+  ["/usr/local/bin/linxira-install-cleanup"]="0:0:755"
+  ["/usr/local/bin/linxira-install-log-export"]="0:0:755"
   ["/usr/local/bin/linxira-installer-shell"]="0:0:755"
   ["/usr/local/bin/linxira-live-session"]="0:0:755"
 )

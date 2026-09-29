@@ -27,7 +27,7 @@ class InstallRetryCleanupTests(unittest.TestCase):
         # 同一次 pkexec 内先清理后 exec, 不产生额外授权弹窗
         self.assertIn("exec /usr/bin/calamares", script)
         # 清理失败不阻断安装
-        self.assertIn("linxira-install-cleanup || true", script)
+        self.assertIn("sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true", script)
 
     def test_cleanup_script_clears_stale_mounts_and_never_fails(self):
         script = CLEANUP.read_text(encoding="utf-8")
@@ -48,12 +48,21 @@ class InstallRetryCleanupTests(unittest.TestCase):
         # 清理的是 live 宿主的挂载表, 绝不能进 chroot
         self.assertIn("chroot: false", conf)
 
-    def test_partition_page_preselects_erase(self):
-        # allowManualPartitioning: false —— 手动改分区不可用, 擦盘是唯一通路,
-        # 必须预选, 否则重试用户在分区页无从下手。
+    def test_partition_page_stays_on_proven_none(self):
+        # 2026-09-29: erase 预选触发 calamares 启动 SIGABRT(134), 回退 none;
+        # 重试可用性由启动清场保证, 不依赖预选。
         conf = PARTITION.read_text(encoding="utf-8")
-        self.assertIn("initialPartitioningChoice: erase", conf)
+        self.assertIn("initialPartitioningChoice: none", conf)
         self.assertIn("allowManualPartitioning: false", conf)
+
+    def test_cleanup_script_is_executable_in_the_iso(self):
+        # 2026-09-29 实测: 漏登记 file_permissions → 脚本 644 → pkexec 报
+        # Permission denied, 清场静默失效。执行位唯一来源是 profiledef.sh。
+        profile = (ROOT / "profiledef.sh").read_text(encoding="utf-8")
+        self.assertIn('["/usr/local/bin/linxira-install-cleanup"]="0:0:755"', profile)
+        self.assertIn('["/usr/local/bin/linxira-install-log-export"]="0:0:755"', profile)
+        launcher = LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("sh /usr/local/bin/linxira-install-cleanup", launcher)
 
 
 if __name__ == "__main__":

@@ -192,7 +192,7 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("/tmp/linxira-installer.log", script)
         self.assertIn("konsole --fullscreen --hold", script)
         # 2026-09-28: pkexec 内先清理失败现场再 exec calamares
-        self.assertIn("/usr/local/bin/linxira-install-cleanup || true; exec /usr/bin/calamares", script)
+        self.assertIn("sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares", script)
         self.assertIn("lock=/tmp/linxira-installer.lock", script)
         self.assertIn("flock -n 9", script)
         self.assertIn("status == 87", script)
