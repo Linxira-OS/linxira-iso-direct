@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Linxira Scale L mark">
+  <path fill="#20B8B0" d="M112 64H224V336H448V448H112Z"/>
+  <path d="M164 112V392H392" fill="none" stroke="#0E1417" stroke-width="12" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M150 160H194M150 216H178M150 272H194M150 328H178M224 378V406M280 378V396M336 378V406" fill="none" stroke="#E8F7F6" stroke-width="10" stroke-linecap="square"/>
+  <path d="M392 380V404" stroke="#F36F5D" stroke-width="12"/>
+</svg>
