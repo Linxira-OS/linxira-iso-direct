@@ -57,7 +57,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
             '"/usr/bin/linxira-recovery-diagnostics"',
             '"/usr/bin/linxira-components-service"',
             '"/usr/lib/systemd/system/linxira-components.service"',
-            '"linxira-components": "0.8.0-1"',
+            '"linxira-components": "0.8.2-1"',
             '"linxira-hardware-driver-manager": "0.4.0-3"',
             '"/usr/bin/linxira-components-worker"',
             '"/usr/lib/systemd/system/linxira-components-worker@.service"',
@@ -327,7 +327,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
 
             versions = {
                 "linxira-hwd-detector": "1.23.0-2",
-                "linxira-components": "0.8.0-1",
+                "linxira-components": "0.8.2-1",
                 "linxira-hardware-driver-manager": "0.4.0-3",
             }
             globalstore = {

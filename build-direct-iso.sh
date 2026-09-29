@@ -253,7 +253,7 @@ validate_package_artifact "$wiki_package" linxira-wiki \
   usr/share/linxira/wiki/ai/manifest.json \
   usr/share/linxira/wiki/docs/index.md \
   usr/share/licenses/linxira-wiki/LICENSE
-validate_package_version "$components_package" 0.8.0-1
+validate_package_version "$components_package" 0.8.2-1
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
