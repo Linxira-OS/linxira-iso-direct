@@ -45,8 +45,13 @@ class InstallRetryCleanupTests(unittest.TestCase):
         self.assertLess(settings.index("shellprocess@linxira-cleanup", exec_at),
                         re.search(r"^\s*- partition$", settings[exec_at:], re.MULTILINE).start() + exec_at)
         conf = SHELLCONF.read_text(encoding="utf-8")
-        # 清理的是 live 宿主的挂载表, 绝不能进 chroot
-        self.assertIn("chroot: false", conf)
+        # 2026-09-29 教训: shellprocess 接口的键是 script/dontChroot ——
+        # module.desc 风格的 type/name/interface/command/chroot 会让模块
+        # 加载即抛异常, calamares 启动直接 SIGABRT(134)。
+        self.assertIn("dontChroot: true", conf)
+        self.assertIn("    - command: \"-/usr/local/bin/linxira-install-cleanup\"", conf)
+        self.assertNotIn("interface: shellprocess", conf)
+        self.assertNotIn("chroot:", conf)
 
     def test_partition_page_stays_on_proven_none(self):
         # 2026-09-29: erase 预选触发 calamares 启动 SIGABRT(134), 回退 none;
