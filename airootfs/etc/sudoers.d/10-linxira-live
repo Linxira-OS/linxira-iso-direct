@@ -1,0 +1,6 @@
+# Live 会话提权：installer 用户免密 sudo。
+# sddm 自动登录 installer（10-linxira-live.conf），sysusers 建户默认锁密码（!*），
+# 没有 NOPASSWD 白名单时图形会话内无任何提权路径（sudo 问锁死密码、passwd 要旧密码）。
+# archiso 惯例：live 用户 = 控制台 root 等价（root 空密码），白名单只是把事实显式化。
+# 注意：sudo 拒绝非 0440 的 sudoers 文件，权限登记见 profiledef.sh file_permissions。
+installer ALL=(ALL:ALL) NOPASSWD: ALL
