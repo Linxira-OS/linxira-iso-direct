@@ -25,7 +25,11 @@ set +e
 # 不可操作, 连下一步都进不去 —— 必须在任何页面渲染之前清)。与 calamares
 # 同一次 pkexec, 不产生额外授权弹窗; 清理失败不阻断安装。
 # sh 直调 + 静默: 即便 overlay 权限丢失也只静默跳过, 不污染诊断日志
-pkexec /bin/sh -c 'sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares' >>"$log" 2>&1
+#
+# 2026-09-30: pkexec 剥离会话环境 —— Calamares 落进「有 XDG_RUNTIME_DIR 但
+# 没有 wayland socket」的组合时 Qt wayland 插件直接 abort(SIGABRT=134,
+# calamares --version 都崩)。显式注入 installer 会话凭据后再启动。
+pkexec /bin/sh -c 'export XDG_RUNTIME_DIR=/run/user/$(id -u installer) WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0} QT_QPA_PLATFORM=wayland; sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares' >>"$log" 2>&1
 status=$?
 set -e
 
@@ -33,10 +37,28 @@ printf '\nCalamares exited with status %d.\n' "$status" >>"$log"
 if (( status == 87 )); then
   printf 'Calamares is already running; only one installer instance is allowed.\n' >>"$log"
 fi
-# 失败不弹终端、不抢焦点：桌面通知指路日志文件，用户经 Welcome「终端」自行查看。
-# 2026-09-30: 此前 konsole --fullscreen --hold 自动弹全屏抢焦点，打断用户操作。
+# 失败不弹终端、不抢焦点; 参照成熟崩溃报告实践(PCL 等): 自动收集 -> 自动上传 ->
+# 把短链放进通知 —— 用户手机拍屏, 照片里也有可行动的链接(2026-09-30 产品决策)。
 if (( status != 0 )); then
   notify-send -u critical -a "Linxira Installer" \
     "安装器异常退出（status $status）" \
-    "诊断日志：/tmp/linxira-installer.log（Welcome 页「终端」可查看）" 2>/dev/null || true
+    "正在自动收集并上传诊断报告…" 2>/dev/null || true
+  link=$(linxira-config logs collect >/dev/null 2>&1 && linxira-config logs upload 2>/dev/null | grep -aoE 'https?://[^[:space:]]+' | tail -n 1)
+  {
+    printf '\n=== 诊断报告 ===\n'
+    if [ -n "$link" ]; then
+      printf '报告链接(任意设备可打开): %s\n' "$link"
+    else
+      printf '离线诊断包: %s/linxira-logs-*.txt (Welcome 页「终端」可查看)\n' "${HOME}/linxira-logs"
+    fi
+  } >>"$log"
+  if [ -n "$link" ]; then
+    notify-send -u critical -a "Linxira Installer" \
+      "安装器异常退出（status $status）" \
+      "诊断报告链接：$link" 2>/dev/null || true
+  else
+    notify-send -u critical -a "Linxira Installer" \
+      "安装器异常退出（status $status，报告上传失败）" \
+      "诊断包：${HOME}/linxira-logs/（Welcome 页「终端」可查看）" 2>/dev/null || true
+  fi
 fi
