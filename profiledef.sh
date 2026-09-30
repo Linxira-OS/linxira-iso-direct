@@ -24,9 +24,6 @@ file_permissions=(
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
   ["/etc/sudoers.d/10-linxira-live"]="0:0:440"
-  # 2026-09-30: 临时覆盖层 —— 携带 logs upload 的 dpaste//dev/tcp 兜底,
-  # 待 config-hub 下个版本发布后移除本文件与该覆盖。
-  ["/usr/bin/linxira-config"]="0:0:755"
   ["/usr/local/bin/linxira-install-cleanup"]="0:0:755"
   ["/usr/local/bin/linxira-install-log-export"]="0:0:755"
   ["/usr/local/bin/linxira-installer-shell"]="0:0:755"
