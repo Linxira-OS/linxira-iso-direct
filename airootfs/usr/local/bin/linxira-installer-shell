@@ -33,7 +33,10 @@ printf '\nCalamares exited with status %d.\n' "$status" >>"$log"
 if (( status == 87 )); then
   printf 'Calamares is already running; only one installer instance is allowed.\n' >>"$log"
 fi
+# 失败不弹终端、不抢焦点：桌面通知指路日志文件，用户经 Welcome「终端」自行查看。
+# 2026-09-30: 此前 konsole --fullscreen --hold 自动弹全屏抢焦点，打断用户操作。
 if (( status != 0 )); then
-  exec /usr/bin/konsole --fullscreen --hold -e /usr/bin/bash -c \
-    'printf "Linxira installer stopped. Diagnostic log:\n\n"; cat /tmp/linxira-installer.log'
+  notify-send -u critical -a "Linxira Installer" \
+    "安装器异常退出（status $status）" \
+    "诊断日志：/tmp/linxira-installer.log（Welcome 页「终端」可查看）" 2>/dev/null || true
 fi

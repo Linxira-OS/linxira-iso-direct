@@ -1,6 +1,14 @@
 polkit.addRule(function(action, subject) {
-    if (action.id == "com.github.calamares.calamares.pkexec.run" &&
-        subject.user == "installer" && subject.local && subject.active) {
-        return polkit.Result.YES;
+    if (subject.user == "installer" && subject.local && subject.active) {
+        // Calamares 自带策略 action（直接 pkexec /usr/bin/calamares 时命中）
+        if (action.id == "com.github.calamares.calamares.pkexec.run") {
+            return polkit.Result.YES;
+        }
+        // linxira-installer-shell 经 pkexec /bin/sh -c 启动 Calamares，
+        // 命中通用 exec action；live 会话 installer = root 等价（archiso 惯例），
+        // 不白名单则回落 root 密码弹窗。
+        if (action.id == "org.freedesktop.policykit.exec") {
+            return polkit.Result.YES;
+        }
     }
 });
