@@ -1,0 +1,2429 @@
+#!/bin/bash
+# Linxira Config Hub - CLI Tool v2.2
+# Cross-ecosource configuration & security manager
+
+set -euo pipefail
+
+VERSION="2.5.1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CATALOG_PATH="${LINXIRA_CATALOG_PATH:-/usr/share/linxira/catalog/catalog-v3.json}"
+CATALOG_STATE_PATH="${LINXIRA_CATALOG_STATE_PATH:-/var/lib/linxira/catalog/state-v1.json}"
+
+# Colors
+# ANSI-C quoted so the variables hold real ESC characters; plain cat (help
+# heredoc) and printf output then render colors correctly without echo -e.
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
+
+info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[OK]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+header() { echo -e "\n${BOLD}${CYAN}=== $1 ===${NC}"; }
+
+backend_pending() {
+    error "This action is disabled until the Linxira system transaction backend provides plan, verify, receipt, and rollback support."
+}
+
+require_root() {
+    local uid
+    uid=$(id -u 2>/dev/null) || error "This command requires root privileges. Use sudo."
+    [[ $uid =~ ^[0-9]+$ ]] || error "This command requires root privileges. Use sudo."
+    [ "$uid" -eq 0 ] || error "This command requires root privileges. Use sudo."
+}
+
+validate_port() {
+    local port=$1
+    [[ $port =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)) || \
+        error "Invalid port: $port (use a number from 1 to 65535)"
+}
+
+validate_dns_server() {
+    local server=$1
+    [[ $server =~ ^[0-9A-Fa-f:.]+$ ]] || error "Invalid DNS server address: $server"
+    [[ $server != *[[:space:]/]* ]] || error "Invalid DNS server address: $server"
+}
+
+target_user() {
+    local uid=${PKEXEC_UID:-}
+    if [[ $uid =~ ^[0-9]+$ ]] && ((uid > 0)); then
+        getent passwd "$uid" | cut -d: -f1
+    elif [[ -n ${SUDO_USER:-} && ${SUDO_USER} != root ]]; then
+        printf '%s\n' "$SUDO_USER"
+    elif [[ ${USER:-} != root ]]; then
+        printf '%s\n' "$USER"
+    else
+        logname 2>/dev/null || true
+    fi
+}
+
+# ─── Help ────────────────────────────────────────────────────
+
+show_help() {
+    cat << EOF
+${BOLD}Linxira Config Hub v${VERSION}${NC}
+
+${BOLD}Usage:${NC} linxira-config <command> [action] [options]
+
+${BOLD}Commands:${NC}
+  mirror <action>       Package mirror management
+  logs <action>         Diagnostic log collect & upload (collect/upload)
+  source                Show package sources
+  service <svc> <act>   Disabled pending transactional backend
+  security <action>     Security hardening & firewall
+  ssh <action>          SSH server & key management
+  rdp <action>          Remote desktop (RDP/VNC)
+  virt <action>         Virtualization (KVM/QEMU/Docker)
+  power <action>        Power status and disabled sleep/suspend mutations
+  catalog <kind>        Query software/component/bundle state
+  runtime <action>      Runtime and package-manager status
+  conda channels <act>  Miniforge channel configuration
+  timeshift <action>    Timeshift quick setup (enable/disable/status)
+  workspace-guard <act> Workspace guard setup & state (enable/disable/status/handbook)
+  stack <action>        Software stacks — bridge to linxira-component-manager (list/status/install/tui)
+  env <action>          Environment variables in /etc/profile.d/linxira-env.sh (list/get/set/unset)
+  tui                   Interactive number menu (pure bash, same commands)
+  gpu <action>          GPU driver management
+  net <action>          Network diagnostics & fixes
+  info                  Show system information
+  status                Show a quick system status summary
+  help                  Show this help
+
+${BOLD}Workspace Guard:${NC}
+  linxira-config workspace-guard status            Show guard configuration, store and timer state
+  linxira-config workspace-guard status --json     Same, as one line of JSON
+  sudo linxira-config workspace-guard enable      Pick a disk, create the ext4 store, register, start the timer
+  sudo linxira-config workspace-guard disable     Stop the timer, keep every stored recovery point
+  linxira-config workspace-guard handbook         Print the AI-readable handbook manifest
+  linxira-components guard <status|list|snapshot|restore>  Day-to-day guard operations
+
+${BOLD}Machine-readable output (--json):${NC}
+  linxira-config workspace-guard status --json
+  linxira-config ssh status --json
+  linxira-config net diag --json
+  linxira-config mirror arch list --json
+
+${BOLD}Security:${NC}
+  linxira-config security status       Show security posture
+  linxira-config security harden       Disabled pending transactional backend
+  linxira-config security ufw on|off   Enable/disable UFW firewall
+  linxira-config security ufw status   Show firewall rules
+  linxira-config security ufw allow <port>   Allow a TCP port through UFW
+
+${BOLD}SSH:${NC}
+  linxira-config ssh on|off            Enable/disable remote SSH access (installs openssh,\n                                       enables sshd, allows password auth)
+  linxira-config ssh status            Show SSH status & connection info
+  linxira-config ssh port <number>     Change SSH port
+  linxira-config ssh key list                    List public keys
+  linxira-config ssh key show [name]             Show a public key
+  linxira-config ssh key fingerprint [name]      Show a key fingerprint
+  linxira-config ssh key generate [name]          Generate an Ed25519 key
+  linxira-config ssh key remove <name> --yes      Remove one key pair
+  linxira-config ssh authorized list              List authorized keys
+  linxira-config ssh authorized add <public-key>  Add one plain public key
+  linxira-config ssh authorized remove <fingerprint> --yes
+
+${BOLD}Logs (diagnostics):${NC}
+  linxira-config logs collect          收集诊断日志到 ~/linxira-logs/
+  linxira-config logs upload [file]    上传日志并返回分享链接(0x0.st/termbin)
+
+${BOLD}Catalog (read-only):${NC}
+  linxira-config catalog software [list] [--all|--status <state>]
+  linxira-config catalog component [list] [--all|--status <state>]
+  linxira-config catalog bundle [list] [--all|--status <state>]
+  linxira-config catalog <kind> show <id>
+
+${BOLD}Remote Desktop:${NC}
+  linxira-config rdp on|off            Disabled pending transactional backend
+                                       (xrdp not yet in signed repositories)
+  linxira-config rdp vnc-on|vnc-off    Disabled pending transactional backend
+                                       (per-user TigerVNC session policy pending)
+
+${BOLD}Virtualization:${NC}
+  linxira-config virt status           Check virtualization support
+  linxira-config virt kvm-on|docker-on|podman-on
+                                        Disabled pending transactional backend
+
+${BOLD}Power:${NC}
+  linxira-config power status          Show power settings
+  linxira-config power <action>        Disabled pending corrected power backend
+
+${BOLD}Network:${NC}
+  linxira-config net diag              Full network diagnostics
+  linxira-config net dns               Show current DNS servers
+  linxira-config net dns set <ip>      Set DNS server (write /etc/resolv.conf)
+
+${BOLD}Mirror:${NC}
+  linxira-config mirror <type> list          List Arch, npm, pip, AUR, Flatpak, or Go sources
+  linxira-config mirror <type> speed [id]    Measure source latency
+  linxira-config mirror <type> auto          Probe all sources and select the fastest
+  linxira-config mirror <type> set <id|url>  Select a source (user-scoped for npm/pip/aur/go)
+  linxira-config mirror <type> reset         Restore the official source
+  linxira-config mirror aur set <https-url>  Set a validated custom AUR Git mirror
+  linxira-config mirror flatpak set <id|url> Configure an explicit Flatpak remote
+  linxira-config mirror go set <id|url>      Configure the Go module proxy
+
+${BOLD}Miniforge:${NC}
+  linxira-config conda channels list       Show configured Miniforge channels
+  linxira-config conda channels add <id>   Add conda-forge or bioconda
+  linxira-config conda channels remove <id> Remove an explicitly configured channel
+  linxira-config conda channels reset      Remove configured channels
+
+${BOLD}Examples:${NC}
+  linxira-config security status       # Show security posture
+  linxira-config ssh status            # Show SSH status
+  linxira-config runtime status        # Show runtime and package-manager status
+  linxira-config catalog software --all # List catalog software state
+  linxira-config net diag              # Diagnose network issues
+  linxira-config mirror arch list      # List Arch mirror candidates
+EOF
+}
+
+# ─── Mirror Management ───────────────────────────────────────
+
+mirror_records() {
+    # Columns: id|name|country|url|probe
+    case "$1" in
+        arch)
+            printf '%s\n' \
+                'official|Arch Linux geo mirror|global|https://geo.mirror.pkgbuild.com/$repo/os/$arch|https://geo.mirror.pkgbuild.com/core/os/x86_64/core.db' \
+                'tuna|Tsinghua TUNA|cn|https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch|https://mirrors.tuna.tsinghua.edu.cn/archlinux/core/os/x86_64/core.db' \
+                'aliyun|Alibaba Cloud|cn|https://mirrors.aliyun.com/archlinux/$repo/os/$arch|https://mirrors.aliyun.com/archlinux/core/os/x86_64/core.db' \
+                'ustc|USTC|cn|https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch|https://mirrors.ustc.edu.cn/archlinux/core/os/x86_64/core.db' \
+                'tencent|Tencent Cloud|cn|https://mirrors.cloud.tencent.com/archlinux/$repo/os/$arch|https://mirrors.cloud.tencent.com/archlinux/core/os/x86_64/core.db' \
+                'huawei|Huawei Cloud|cn|https://repo.huaweicloud.com/archlinux/$repo/os/$arch|https://repo.huaweicloud.com/archlinux/core/os/x86_64/core.db' \
+                '163|NetEase 163|cn|https://mirrors.163.com/archlinux/$repo/os/$arch|https://mirrors.163.com/archlinux/core/os/x86_64/core.db'
+            ;;
+        npm)
+            printf '%s\n' \
+                'official|npm official|global|https://registry.npmjs.org/|https://registry.npmjs.org/npm' \
+                'npmmirror|npmmirror (Taobao)|cn|https://registry.npmmirror.com/|https://registry.npmmirror.com/npm' \
+                'tencent|Tencent Cloud|cn|https://mirrors.cloud.tencent.com/npm/|https://mirrors.cloud.tencent.com/npm/npm' \
+                'huawei|Huawei Cloud|cn|https://repo.huaweicloud.com/repository/npm/|https://repo.huaweicloud.com/repository/npm/npm' \
+                'sjtu|SJTU|cn|https://mirror.sjtu.edu.cn/npm-registry/|https://mirror.sjtu.edu.cn/npm-registry/npm'
+            ;;
+        pip)
+            printf '%s\n' \
+                'official|PyPI official|global|https://pypi.org/simple|https://pypi.org/simple/pip/' \
+                'tuna|Tsinghua TUNA|cn|https://pypi.tuna.tsinghua.edu.cn/simple|https://pypi.tuna.tsinghua.edu.cn/simple/pip/' \
+                'aliyun|Alibaba Cloud|cn|https://mirrors.aliyun.com/pypi/simple|https://mirrors.aliyun.com/pypi/simple/pip/' \
+                'ustc|USTC|cn|https://mirrors.ustc.edu.cn/pypi/simple|https://mirrors.ustc.edu.cn/pypi/simple/pip/' \
+                'tencent|Tencent Cloud|cn|https://mirrors.cloud.tencent.com/pypi/simple|https://mirrors.cloud.tencent.com/pypi/simple/pip/' \
+                'huawei|Huawei Cloud|cn|https://mirrors.huaweicloud.com/repository/pypi/simple|https://mirrors.huaweicloud.com/repository/pypi/simple/pip/' \
+                'sjtu|SJTU|cn|https://mirror.sjtu.edu.cn/pypi/web/simple|https://mirror.sjtu.edu.cn/pypi/web/simple/pip/' \
+                '163|NetEase 163|cn|https://mirrors.163.com/pypi/simple|https://mirrors.163.com/pypi/simple/pip/'
+            ;;
+        aur)
+            printf '%s\n' \
+                'official|Arch User Repository|global|https://aur.archlinux.org|https://aur.archlinux.org/yay.git/info/refs?service=git-upload-pack' \
+                'tuna|Tsinghua AUR mirror|cn|https://aur.tuna.tsinghua.edu.cn|https://aur.tuna.tsinghua.edu.cn/yay.git/info/refs?service=git-upload-pack'
+            ;;
+        flatpak)
+            printf '%s\n' \
+                'flathub|Flathub|global|https://flathub.org/repo/flathub.flatpakrepo|https://flathub.org/repo/flathub.flatpakrepo' \
+                'sjtu|SJTU Flathub|cn|https://mirror.sjtu.edu.cn/flathub|https://mirror.sjtu.edu.cn/flathub/repo/flathub.flatpakrepo'
+            ;;
+        go)
+            printf '%s\n' \
+                'official|Go proxy official|global|https://proxy.golang.org|https://proxy.golang.org/github.com/golang/example/@v/list' \
+                'goproxy-cn|goproxy.cn|cn|https://goproxy.cn|https://goproxy.cn/github.com/golang/example/@v/list' \
+                'goproxy-io|goproxy.io|global|https://goproxy.io|https://goproxy.io/github.com/golang/example/@v/list' \
+                'aliyun|Alibaba Cloud Go|cn|https://mirrors.aliyun.com/goproxy/|https://mirrors.aliyun.com/goproxy/github.com/golang/example/@v/list'
+            ;;
+        *) error "Unknown mirror type: $1 (use arch/npm/pip/aur/flatpak/go)" ;;
+    esac
+}
+
+mirror_resolve() {
+    local type=$1 selector=$2 id name country url probe
+    if [[ $selector == https://* ]]; then
+        printf '%s|%s\n' "${selector%/}" "${selector%/}"
+        return
+    fi
+    while IFS='|' read -r id name country url probe; do
+        if [[ $id == "$selector" ]]; then
+            printf '%s|%s\n' "$url" "$probe"
+            return
+        fi
+    done < <(mirror_records "$type")
+    error "Unknown $type source: $selector"
+}
+
+mirror_current() {
+    case "$1" in
+        arch) awk '/^[[:space:]]*Server[[:space:]]*=/{print $3; exit}' /etc/pacman.d/mirrorlist 2>/dev/null || true ;;
+        npm) command -v npm >/dev/null && npm config get registry 2>/dev/null || true ;;
+        pip) command -v python >/dev/null && python -m pip config get global.index-url 2>/dev/null || true ;;
+        aur)
+            if [[ -f ${XDG_CONFIG_HOME:-$HOME/.config}/linxira/aur-git-url ]]; then
+                cat -- "${XDG_CONFIG_HOME:-$HOME/.config}/linxira/aur-git-url"
+            else
+                printf '%s\n' 'https://aur.archlinux.org'
+            fi
+            ;;
+        flatpak)
+            command -v flatpak >/dev/null && \
+                flatpak remotes --user --columns=name,url 2>/dev/null | \
+                awk '$1 == "flathub" { print $2; exit }' || true
+            ;;
+        go)
+            command -v go >/dev/null && go env GOPROXY 2>/dev/null || true
+            ;;
+    esac
+}
+
+mirror_list() {
+    local type=${1:-arch} id name country url probe
+    if [ "${2:-}" = "--json" ]; then
+        # 单行 JSON: 候选源是结构化数据, 不需要人读的表格。
+        local rows='[]'
+        while IFS='|' read -r id name country url probe; do
+            rows=$(jq -nc --argjson rows "$rows" --arg id "$id" --arg name "$name" \
+                --arg country "$country" --arg url "$url" \
+                '$rows + [{id: $id, name: $name, country: $country, url: $url}]')
+        done < <(mirror_records "$type")
+        jq -nc --arg type "$type" --arg current "$(mirror_current "$type")" \
+            --argjson sources "$rows" \
+            '{type: $type, current: (if $current == "" then null else $current end), sources: $sources}'
+        return 0
+    fi
+    header "${type^^} Sources"
+    while IFS='|' read -r id name country url probe; do
+        printf '  %-10s %-22s %-7s %s\n' "$id" "$name" "[$country]" "$url"
+    done < <(mirror_records "$type")
+    if [[ $type == aur ]]; then
+        printf '  %-10s %-22s %s\n' custom 'Configured custom URL' "$(mirror_current aur)"
+        echo "  AUR source selection changes Git clone traffic only; RPC metadata stays official."
+    elif [[ $type == flatpak ]]; then
+        echo "  Flatpak remotes are unchanged until an explicit 'set' command is run."
+    fi
+    echo "  Current: $(mirror_current "$type")"
+}
+
+mirror_probe() {
+    local probe=$1 result code seconds
+    # Note: on MSYS/git-bash, curl may emit write errors to /dev/null inside
+    # command substitution; we trust only the --write-out HTTP code.
+    result=$(curl --location --silent --show-error --output /dev/null \
+        --connect-timeout 4 --max-time 12 --retry 1 --retry-all-errors \
+        --write-out '%{http_code} %{time_total}' \
+        "$probe" 2>/dev/null)
+    code=${result%% *}
+    seconds=${result#* }
+    [[ $code =~ ^(2|3)[0-9][0-9]$ ]] || return 1
+    [[ $seconds =~ ^[0-9.]+$ ]] || seconds=0
+    awk -v seconds="$seconds" 'BEGIN { printf "%.0f ms", seconds * 1000 }'
+}
+
+mirror_speed() {
+    local type=${1:-arch} selector=${2:-} id name country url probe latency
+    command -v curl >/dev/null || error "curl is required for mirror testing"
+    header "Testing ${type^^} Sources"
+    while IFS='|' read -r id name country url probe; do
+        [[ -z $selector || $id == "$selector" ]] || continue
+        if latency=$(mirror_probe "$probe"); then
+            printf '  %-10s %-22s %-7s %s\n' "$id" "$name" "[$country]" "$latency"
+        else
+            printf '  %-10s %-22s %-7s %s\n' "$id" "$name" "[$country]" 'unreachable'
+        fi
+    done < <(mirror_records "$type")
+    if [[ -n $selector && $selector == https://* ]]; then
+        probe=${selector%/}
+        [[ $type != aur ]] || probe="${selector%/}/yay.git/info/refs?service=git-upload-pack"
+        if latency=$(mirror_probe "$probe"); then
+            printf '  %-10s %-22s %s\n' custom 'Custom URL' "$latency"
+        else
+            error "The custom URL did not pass its connectivity check"
+        fi
+    fi
+}
+
+# mirror_auto: probe every source, pick the fastest reachable one, and apply it.
+# Prints a comparison table and writes the winner with mirror_set (sudo for arch).
+mirror_auto() {
+    local type=${1:-} best_id="" best_ms=999999 id name country url probe latency ms
+    [[ -n $type ]] || error "Specify a mirror type: linxira-config mirror <type> auto"
+    case "$type" in
+        arch|npm|pip|aur|flatpak|go) ;;
+        *) error "Unknown mirror type: $type (use arch/npm/pip/aur/flatpak/go)" ;;
+    esac
+    command -v curl >/dev/null || error "curl is required for mirror testing"
+    command -v sort >/dev/null || error "sort is required for mirror selection"
+    header "Auto-selecting fastest ${type^^} source"
+    while IFS='|' read -r id name country url probe; do
+        if latency=$(mirror_probe "$probe"); then
+            printf '  %-10s %-22s %-7s %s\n' "$id" "$name" "[$country]" "$latency"
+            ms=${latency% *}
+            if [[ $ms =~ ^[0-9]+$ ]] && ((ms < best_ms)); then
+                best_ms=$ms
+                best_id=$id
+            fi
+        else
+            printf '  %-10s %-22s %-7s %s\n' "$id" "$name" "[$country]" 'unreachable'
+        fi
+    done < <(mirror_records "$type")
+    if [[ -z $best_id ]]; then
+        error "No reachable $type source found; check your network connection"
+    fi
+    success "Fastest source: $best_id (${best_ms} ms) — applying"
+    mirror_set "$type" "$best_id"
+}
+
+aur_set_git_url() {
+    local new_url=${1%/} state_dir state_file old_url
+    state_dir=${XDG_CONFIG_HOME:-$HOME/.config}/linxira
+    state_file=$state_dir/aur-git-url
+    old_url=$(mirror_current aur)
+    if [[ $old_url != https://aur.archlinux.org ]]; then
+        git config --global --unset-all "url.${old_url}/.insteadOf" 2>/dev/null || true
+    fi
+    mkdir -p "$state_dir"
+    printf '%s\n' "$new_url" >"$state_file"
+    if [[ $new_url != https://aur.archlinux.org ]]; then
+        git config --global --replace-all "url.${new_url}/.insteadOf" 'https://aur.archlinux.org/'
+    fi
+}
+
+mirror_set() {
+    local type=$1 selector=${2:-} resolved url probe latency
+    [[ -n $selector ]] || error "Specify a source ID or HTTPS URL"
+    resolved=$(mirror_resolve "$type" "$selector")
+    IFS='|' read -r url probe <<<"$resolved"
+    [[ $url == https://* ]] || error "Only HTTPS package sources are accepted"
+    command -v curl >/dev/null || error "curl is required for source validation"
+    if [[ $type == aur && $selector == https://* ]]; then
+        probe="${url}/yay.git/info/refs?service=git-upload-pack"
+    fi
+    latency=$(mirror_probe "$probe") || error "Source validation failed: $url"
+
+    case "$type" in
+        arch)
+            printf '# Generated by linxira-config\nServer = %s\n' "$url" | \
+                sudo tee /etc/pacman.d/mirrorlist >/dev/null
+            ;;
+        npm)
+            command -v npm >/dev/null || error "npm is not installed"
+            npm config set registry "$url" --location=user
+            ;;
+        pip)
+            command -v python >/dev/null || error "Python is not installed"
+            python -m pip config --user set global.index-url "$url"
+            ;;
+        aur)
+            command -v git >/dev/null || error "git is required for AUR source configuration"
+            aur_set_git_url "$url"
+            ;;
+        flatpak)
+            command -v flatpak >/dev/null || error "flatpak is not installed"
+            flatpak remote-modify --user --url="$url" flathub 2>/dev/null || \
+                flatpak remote-add --user flathub "$url"
+            ;;
+        go)
+            command -v go >/dev/null || error "Go is not installed"
+            go env -w "GOPROXY=${url},direct"
+            ;;
+    esac
+    success "${type^^} source set to $url ($latency)"
+}
+
+mirror_reset() {
+    mirror_set "$1" official
+}
+
+# ─── Miniforge Channels ───────────────────────────────────────
+
+miniforge_root() {
+    local root
+    command -v conda >/dev/null || return 1
+    root=$(conda info --base 2>/dev/null) || return 1
+    case "${root##*/}" in
+        miniforge*|mambaforge*) printf '%s\n' "$root" ;;
+        *) return 1 ;;
+    esac
+}
+
+require_miniforge() {
+    miniforge_root >/dev/null || error "Miniforge is not installed; refusing to configure a generic Conda distribution"
+}
+
+conda_channel_records() {
+    printf '%s\n' \
+        'conda-forge|conda-forge|https://conda.anaconda.org/conda-forge' \
+        'bioconda|Bioconda|https://conda.anaconda.org/bioconda'
+}
+
+conda_channel_resolve() {
+    local selector=$1 id name url
+    while IFS='|' read -r id name url; do
+        [[ $id == "$selector" ]] && { printf '%s|%s\n' "$id" "$url"; return; }
+    done < <(conda_channel_records)
+    error "Unknown Miniforge channel: $selector (use conda-forge or bioconda)"
+}
+
+conda_channels_list() {
+    require_miniforge
+    header "Miniforge Channels"
+    while IFS='|' read -r id name url; do
+        printf '  %-12s %-14s %s\n' "$id" "$name" "$url"
+    done < <(conda_channel_records)
+    echo ""
+    conda config --show channels 2>/dev/null || true
+    echo "  channel_priority:"
+    conda config --show channel_priority 2>/dev/null | sed 's/^/  /' || true
+}
+
+conda_channels_add() {
+    local selector=${1:-} channel
+    require_miniforge
+    channel=$(conda_channel_resolve "$selector" | cut -d'|' -f1)
+    conda config --add channels "$channel"
+    conda config --set channel_priority strict
+    success "Miniforge channel enabled: $channel"
+}
+
+conda_channels_remove() {
+    local selector=${1:-} channel
+    require_miniforge
+    channel=$(conda_channel_resolve "$selector" | cut -d'|' -f1)
+    conda config --remove channels "$channel" || true
+    success "Miniforge channel removed: $channel"
+}
+
+conda_channels_reset() {
+    require_miniforge
+    conda config --remove-key channels || true
+    conda config --remove-key channel_priority || true
+    success "Miniforge channels reset"
+}
+
+# ── Timeshift 快速配置（配置文件方案: 默认每日 3 份, 更新前自动快照）──
+timeshift_manage() {
+    local action="${1:-help}"
+    case "$action" in
+        enable)
+            require_root
+            if command -v timeshift >/dev/null 2>&1; then
+                if [ -f /usr/share/linxira/timeshift/linxira-timeshift-enable.sh ]; then
+                    sh /usr/share/linxira/timeshift/linxira-timeshift-enable.sh \
+                        && success "Timeshift 已启用: 配置 + 更新前自动快照 + GRUB 快照菜单 + 初始快照" \
+                        || warn "启用脚本未完整执行, 请检查上方 [linxira-timeshift] 输出"
+                else
+                    install -Dm644 /usr/share/linxira/timeshift/timeshift.json /etc/timeshift/timeshift.json 2>/dev/null \
+                        || install -Dm644 /etc/timeshift/timeshift.json.template /etc/timeshift/timeshift.json 2>/dev/null || true
+                    install -Dm644 /usr/share/linxira/timeshift/linxira-timeshift-autosnap.hook /etc/pacman.d/hooks/linxira-timeshift-autosnap.hook 2>/dev/null || true
+                    if [ -f /usr/lib/systemd/system/grub-btrfsd.service ]; then
+                        mkdir -p /etc/systemd/system/grub-btrfsd.service.d
+                        printf '%s\n' '[Service]' 'ExecStart=' \
+                            'ExecStart=/usr/bin/grub-btrfsd --syslog --timeshift-auto' \
+                            > /etc/systemd/system/grub-btrfsd.service.d/linxira-timeshift.conf
+                        systemctl daemon-reload >/dev/null 2>&1 || true
+                        systemctl enable --now grub-btrfsd.service >/dev/null 2>&1 || true
+                    fi
+                    if [ ! -f /etc/timeshift/timeshift.json ]; then
+                        warn "未找到 timeshift 配置模板, 使用 timeshift 默认配置"
+                    fi
+                    timeshift --create --comments "linxira-config enable 初始快照" >/dev/null 2>&1 \
+                        && success "Timeshift 已启用: 每日 3 份 + 启动 3 份, 更新前自动快照, 首个快照已创建" \
+                        || success "Timeshift 已启用: 配置已应用 (快照创建需 btrfs/rsync 模式就绪)"
+                fi
+            else
+                error "timeshift 未安装, 请先: sudo pacman -S timeshift"
+            fi
+            ;;
+        disable)
+            require_root
+            rm -f /etc/pacman.d/hooks/linxira-timeshift-autosnap.hook /usr/share/libalpm/hooks/linxira-timeshift-autosnap.hook
+            if systemctl list-unit-files grub-btrfsd.service >/dev/null 2>&1; then
+                systemctl disable --now grub-btrfsd.service >/dev/null 2>&1 || true
+            fi
+            success "Timeshift 自动快照已关闭 (手动快照仍可用)"
+            ;;
+        status)
+            if command -v timeshift >/dev/null 2>&1; then
+                echo "Timeshift 版本: $(timeshift --version 2>/dev/null | head -1 || echo 未知)"
+                [ -f /etc/timeshift/timeshift.json ] && echo "配置: 已应用 (每日 3 份 + 启动 3 份)" || echo "配置: 未启用 (运行 linxira-config timeshift enable)"
+                [ -f /etc/pacman.d/hooks/linxira-timeshift-autosnap.hook ] && echo "更新前自动快照: 已启用" || echo "更新前自动快照: 未启用"
+                systemctl is-active grub-btrfsd.service >/dev/null 2>&1 && echo "GRUB 快照菜单(grub-btrfsd): 运行中" || echo "GRUB 快照菜单(grub-btrfsd): 未运行"
+                timeshift --list 2>/dev/null | tail -5 || true
+            else
+                echo "timeshift 未安装"
+            fi
+            ;;
+        help|*)
+            echo "Usage: linxira-config timeshift <enable|disable|status>"
+            echo "  enable   应用配置(每日3份+启动3份) + 更新前自动快照 + GRUB 快照菜单 + 建首个快照"
+            echo "  disable  关闭自动快照 (保留手动)"
+            echo "  status   查看当前状态与快照列表"
+            ;;
+    esac
+}
+
+# ─── Workspace Guard ────────────────────────────────────────────
+# 防 agent 用完整用户权限把工作区(含 .git)干掉。分区与仓库由 root 拥有,
+# agent 读不到配置、挂不上备份盘。恢复永远写新目录, 不覆盖原工作区。
+WORKSPACE_GUARD_CONF=/etc/linxira/workspace-guard.conf
+WORKSPACE_GUARD_TIMER=linxira-workspace-guard-snapshot.timer
+
+workspace_guard_configured() {
+    [ -f "$WORKSPACE_GUARD_CONF" ] || return 1
+    grep -qE '^[[:space:]]*store[[:space:]]*=[[:space:]]*[^[:space:]]' "$WORKSPACE_GUARD_CONF" 2>/dev/null
+}
+
+workspace_guard_status_json() {
+    local configured=false readable=true store= present=false workspaces=0 snapshots=0
+    if [ -f "$WORKSPACE_GUARD_CONF" ]; then
+        readable=true
+        workspace_guard_configured 2>/dev/null && configured=true || readable=false
+        store=$(
+            { sed -nE 's/^[[:space:]]*store[[:space:]]*=[[:space:]]*//p' "$WORKSPACE_GUARD_CONF" || true; } \
+            2>/dev/null | head -1
+        )
+        store=${store:-}
+    fi
+    if [ "$configured" = true ] && [ -d "$store" ]; then
+        present=true
+        workspaces=$(find "$store/workspaces" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+        snapshots=$(find "$store/workspaces" -mindepth 2 -maxdepth 2 -type d -name '2*T*Z-*' 2>/dev/null | wc -l)
+    fi
+    local timer=inactive
+    systemctl is-active --quiet "$WORKSPACE_GUARD_TIMER" 2>/dev/null && timer=active
+    local enabled=disabled
+    systemctl is-enabled --quiet "$WORKSPACE_GUARD_TIMER" 2>/dev/null && enabled=enabled
+    jq -nc --argjson configured "$configured" --argjson readable "$readable" \
+        --arg store "$store" --argjson present "$present" \
+        --argjson workspaces "$workspaces" --argjson snapshots "$snapshots" \
+        --arg timer "$timer" --arg enabled "$enabled" \
+        '{configured: $configured, config_readable: $readable,
+          store: (if $store == "" then null else $store end),
+          store_present: $present, workspaces: $workspaces, snapshot_count: $snapshots,
+          timer: $timer, timer_enabled: $enabled}'
+}
+
+workspace_guard_status() {
+    local as_json=false
+    [ "${2:-}" = "--json" ] && as_json=true
+    if $as_json; then
+        workspace_guard_status_json
+        return 0
+    fi
+    header "Workspace Guard"
+    if [ ! -f "$WORKSPACE_GUARD_CONF" ]; then
+        echo "  Configuration: not installed (run: sudo linxira-config workspace-guard enable)"
+        return 0
+    fi
+    if ! workspace_guard_configured 2>/dev/null; then
+        # 配置在但当前用户读不到 —— 这正是设计, 不是权限故障。
+        echo "  Configuration: present but not readable by $(id -un) (root-owned by design)"
+        return 0
+    fi
+    local store
+    store=$(sed -nE 's/^[[:space:]]*store[[:space:]]*=[[:space:]]*//p' "$WORKSPACE_GUARD_CONF" | head -1)
+    echo "  Configuration: enabled"
+    echo "  Store:          ${store:-<unset>}"
+    if [ -d "$store" ]; then
+        echo "  Workspaces:     $(find "$store/workspaces" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
+        echo "  Snapshots:      $(find "$store/workspaces" -mindepth 2 -maxdepth 2 -type d -name '2*T*Z-*' 2>/dev/null | wc -l)"
+    else
+        echo "  Store:          not mounted yet (the guard partition is not in fstab by design)"
+    fi
+    systemctl is-active --quiet "$WORKSPACE_GUARD_TIMER" 2>/dev/null \
+        && echo "  Timer:          running (${WORKSPACE_GUARD_TIMER})" \
+        || echo "  Timer:          not running"
+}
+
+workspace_guard_free_space() {
+    df -h --output=source,size,avail,target -x tmpfs -x devtmpfs 2>/dev/null | tail -n +2
+}
+
+workspace_guard_write_config() {
+    local store_path=$1 uuid=$2 keep_scheduled=$3 keep_manual=$4 schedule=$5
+    install -d -m 700 /etc/linxira
+    # 用 umask + 重定向而不是 tee -a: 配置文件从创建那一刻起就是 0600。
+    ( umask 177 && printf '[guard]\nstore_uuid = %s\nstore = %s\nschedule = %s\nkeep_scheduled = %s\nkeep_manual = %s\n' \
+        "$uuid" "$store_path" "$schedule" "$keep_scheduled" "$keep_manual" > "$WORKSPACE_GUARD_CONF" )
+    chmod 600 "$WORKSPACE_GUARD_CONF"
+}
+
+workspace_guard_register_workspaces() {
+    local user_name store_path
+    user_name=$(target_user)
+    store_path=$1
+    local home=/home/$user_name
+    [ -d "$home" ] || home=$(getent passwd "$user_name" | cut -d: -f6)
+    local candidates=("$home/Linxira-OS" "$home/Projects" "$home/work" "$home/src")
+    local registered=0 path
+    for path in "${candidates[@]}"; do
+        [ -d "$path" ] || continue
+        PYTHONPATH=/usr/lib/linxira-components /usr/bin/python -c '
+import sys
+from linxira_components import guard_store
+config = guard_store.read_config()
+outcome = guard_store.register_workspace(config, sys.argv[1])
+print(("registered " if outcome.get("ok") else "skipped ") + sys.argv[1])
+' "$path" 2>/dev/null && registered=$((registered + 1))
+    done
+    echo "$registered"
+}
+
+workspace_guard_enable() {
+    require_root
+    local schedule='*:0/30' keep_scheduled=24 keep_manual=10
+
+    if workspace_guard_configured 2>/dev/null; then
+        info "已配置, 跳过分区步骤 (幂等)"
+    else
+        header "[1/4] 选择守护分区所在磁盘"
+        workspace_guard_free_space
+        local device
+        echo
+        read -r -p "  在哪块盘上创建守护分区 (如 /dev/nvme1n1, 留空取消): " device
+        [ -n "$device" ] || error "未选择设备, 已取消"
+        [ -b "$device" ] || error "不是块设备: $device"
+        if findmnt -n -S "$device" >/dev/null 2>&1; then
+            error "$device 已挂载, 守护分区必须建在未使用的空间上"
+        fi
+
+        header "[2/4] 选择容量"
+        local size
+        echo "  32 / 64 / 128 GB, 或直接输入自定义值"
+        read -r -p "  守护分区大小 [64]: " size
+        size=${size:-64}
+        [[ $size =~ ^[0-9]+$ ]] || error "容量必须是整数 GB: $size"
+        [ "$size" -ge 32 ] || error "守护分区不得小于 32 GB"
+        local size_gib=$((size * 1024))
+
+        header "[3/4] 创建 ext4 守护分区"
+        local partition
+        partition=$(lsblk -nrpo NAME "$device" | tail -n +2 | head -1)
+        [ -n "$partition" ] || partition=$device
+        local part_number
+        part_number=$(lsblk -nrpo NAME "$device" | tail -n +2 | wc -l)
+        [ "$part_number" -gt 0 ] || part_number=1
+        info "在 $partition 上追加第 $part_number 个分区 (${size}G, ext4, label=linxira-guard)"
+        echo "  该操作会修改磁盘分区表, 输入 yes 继续:"
+        read -r -p "  yes: " confirm
+        [ "$confirm" = "yes" ] || error "已取消, 未修改磁盘"
+        if ! sfdisk --no-reread --append "$partition" <<< ",${size_gib}MiB,L" >/dev/null 2>&1; then
+            sfdisk --no-reread --append "$partition" <<< ",+${size}G, L" >/dev/null 2>&1 \
+                || error "创建分区失败, 磁盘未改动"
+        fi
+        partpath --partno "$part_number" "$partition" >/dev/null 2>&1 \
+            || partx -u "$partition" >/dev/null 2>&1 || true
+        local created
+        created=$(partx --show --partno "$part_number" "$partition" 2>/dev/null | tail -1)
+        [ -n "$created" ] || created="${partition}$part_number"
+        udevadm settle >/dev/null 2>&1 || true
+        mkfs.ext4 -q -L linxira-guard "$created" || error "mkfs.ext4 失败"
+        local uuid
+        uuid=$(blkid -s UUID -o value "$created") || error "读取分区 UUID 失败"
+        # 守护盘不写进 fstab: 开机不挂载, 没有 root 就够不着快照。
+        if grep -qF "$created" /etc/fstab 2>/dev/null; then
+            cp /etc/fstab /etc/fstab.linxira-guard.bak
+            sed -i "\\|[[:space:]]$created[[:space:]]|d" /etc/fstab
+            info "已从 /etc/fstab 移除守护盘条目 (备份: /etc/fstab.linxira-guard.bak)"
+        fi
+        workspace_guard_write_config "/var/lib/linxira/guard" "$uuid" "$keep_scheduled" "$keep_manual" "$schedule"
+        success "守护分区已创建并写入 $WORKSPACE_GUARD_CONF (0600, root)"
+        info "已创建的分区不会自动删除 —— 删分区表是破坏性操作, 只能由你显式执行"
+    fi
+
+    header "[4/4] 注册工作区并开启定时器"
+    install -d -m 700 /var/lib/linxira/guard
+    chmod 700 /var/lib/linxira/guard
+    install -d -m 700 /var/lib/linxira/guard/workspaces
+    local registered
+    registered=$(workspace_guard_register_workspaces /var/lib/linxira/guard)
+    success "已注册 $registered 个工作区 (用 linxira-components guard register <path> 可再加)"
+    systemctl enable --now "$WORKSPACE_GUARD_TIMER" || error "定时器启动失败"
+    success "定时器已启用: 每 30 分钟一次 (${WORKSPACE_GUARD_TIMER})"
+    echo
+    workspace_guard_status
+}
+
+workspace_guard_disable() {
+    require_root
+    systemctl disable --now "$WORKSPACE_GUARD_TIMER" >/dev/null 2>&1 || true
+    success "工作区守护定时器已停止 (仓库数据与已注册的恢复点全部保留)"
+}
+
+workspace_guard_adopt_installer() {
+    # 装机阶段已建好分区并写好配置, 这里只补仓库与定时器。
+    require_root
+    if ! workspace_guard_configured 2>/dev/null; then
+        info "装机未选择工作区守护, 跳过"
+        return 0
+    fi
+    install -d -m 700 /var/lib/linxira/guard
+    chmod 700 /var/lib/linxira/guard
+    install -d -m 700 /var/lib/linxira/guard/workspaces
+    local registered
+    registered=$(workspace_guard_register_workspaces /var/lib/linxira/guard)
+    success "已接管装机时创建的工作区守护: 注册 $registered 个工作区"
+    if systemctl enable --now "$WORKSPACE_GUARD_TIMER"; then
+        success "定时器已启用: 每 30 分钟一次 (${WORKSPACE_GUARD_TIMER})"
+    else
+        warn "守护定时器未能启动; 用 systemctl status ${WORKSPACE_GUARD_TIMER} 排查"
+    fi
+}
+
+workspace_guard_handbook() {
+    local manifest=/usr/share/linxira/wiki/ai/manifest.json
+    if [ ! -f "$manifest" ]; then
+        error "官方手册未安装 (linxira-wiki 包)"
+    fi
+    cat "$manifest" | head -40
+}
+
+workspace_guard_manage() {
+    local action="${1:-status}"
+    case "$action" in
+        status) workspace_guard_status "" "${2:-}" ;;
+        enable) shift; workspace_guard_enable "$@" ;;
+        disable) workspace_guard_disable ;;
+        adopt-installer) workspace_guard_adopt_installer ;;
+        handbook) workspace_guard_handbook ;;
+        help|*) echo "Usage: linxira-config workspace-guard <enable|disable|status|handbook>";;
+    esac
+}
+
+# ─── Software Stacks: component-manager 转发桥 ───────────────
+# 2026-09-28 用户决策: config 是 WSL/服务器用户的一站式入口。安装逻辑仍单点
+# 在 component-manager(同一 plan→confirm→apply 事务链), 这里只做显式转发;
+# 直连 `linxira-config install <pkg>` 继续拒止(见 legacy install 入口)。
+stack_manage() {
+    local action="${1:-list}"
+    command -v linxira-component-manager >/dev/null 2>&1 || \
+        error "requires linxira-component-manager (install it from [linxira] repo)"
+    case "$action" in
+        list|status|install)
+            shift
+            exec linxira-component-manager "$action" "$@"
+            ;;
+        tui)
+            shift
+            exec linxira-component-manager --tui "$@"
+            ;;
+        help|*)
+            echo "Usage: linxira-config stack <list|status|install|tui> [ids...] [--yes] [--json] [--dry-run]"
+            ;;
+    esac
+}
+
+# ─── Environment Variables: /etc/profile.d/linxira-env.sh ────
+ENV_FILE=/etc/profile.d/linxira-env.sh
+
+env_list() {
+    local as_json=$1
+    if [ ! -r "$ENV_FILE" ]; then
+        [ "$as_json" = "--json" ] && echo "{}" || true
+        return 0
+    fi
+    if [ "$as_json" = "--json" ]; then
+        python3 - "$ENV_FILE" <<'PY'
+import json
+import re
+import sys
+
+pairs = {}
+for line in open(sys.argv[1], encoding="utf-8"):
+    match = re.match(r"^export ([A-Za-z_][A-Za-z0-9_]*)='(.*)'$", line.rstrip("\n"))
+    if match:
+        pairs[match.group(1)] = match.group(2)
+print(json.dumps(pairs, ensure_ascii=False, sort_keys=True))
+PY
+    else
+        grep -E "^export [A-Za-z_][A-Za-z0-9_]*=" "$ENV_FILE" || true
+    fi
+}
+
+env_get() {
+    local key=$1 as_json=$2 line value
+    line=$(grep -E "^export ${key}=" "$ENV_FILE" 2>/dev/null | tail -1) || true
+    value=${line#*=\'}; value=${value%\'}
+    if [ "$as_json" = "--json" ]; then
+        printf '{"key":"%s","value":"%s"}\n' "$key" "$value"
+    else
+        [ -n "$line" ] && echo "$key=$value" || echo "$key=(unset)"
+    fi
+}
+
+env_manage() {
+    local action="${1:-list}"
+    case "$action" in
+        list)
+            env_list "${2:-}"
+            ;;
+        get)
+            [ -n "${2:-}" ] || error "Use: linxira-config env get <KEY> [--json]"
+            env_get "$2" "${3:-}"
+            ;;
+        set)
+            local key="${2:-}" value="${3:-}"
+            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || error "invalid KEY: $key"
+            [ -n "$3" ] || error "Use: linxira-config env set <KEY> <VALUE>"
+            require_root
+            install -d /etc/profile.d
+            touch "$ENV_FILE" && chmod 644 "$ENV_FILE"
+            value=${value//\'/\'\\\'\'}
+            if grep -qE "^export ${key}=" "$ENV_FILE"; then
+                sed -i "s|^export ${key}=.*|export ${key}='${value}'|" "$ENV_FILE"
+            else
+                printf "export %s='%s'\n" "$key" "$value" >> "$ENV_FILE"
+            fi
+            success "env ${key} 已写入 $ENV_FILE (新登录会话生效)"
+            ;;
+        unset)
+            [ -n "${2:-}" ] || error "Use: linxira-config env unset <KEY>"
+            require_root
+            [ -f "$ENV_FILE" ] && sed -i "/^export ${2}=/d" "$ENV_FILE"
+            success "env ${2} 已移除"
+            ;;
+        help|*)
+            echo "Usage: linxira-config env <list [--json]|get KEY [--json]|set KEY VALUE|unset KEY>"
+            ;;
+    esac
+}
+
+# ─── TUI: 纯 bash 数字菜单(零依赖, 与指令同一实现) ───────────
+config_tui() {
+    while true; do
+        clear
+        echo -e "\e[1mLinxira Config Hub\e[0m v${VERSION}  —  数字选择, q 退出"
+        echo "  1) 系统信息          2) 镜像源测速与切换"
+        echo "  3) 网络诊断          4) 安全加固状态"
+        echo "  5) SSH 管理          6) Timeshift 快照"
+        echo "  7) 无头/桌面切换     8) 工作区守护"
+        echo "  9) 软件栈安装(TUI)  10) 环境变量"
+        echo " 11) 常用组件清单     12) 恢复诊断"
+        echo -n "> "
+        local choice
+        read -r choice || break
+        case "$choice" in
+            1) show_info ;;
+            2) mirror_manage speed ;;
+            3) net_diag ;;
+            4) security_manage status ;;
+            5) ssh_manage status ;;
+            6) timeshift_manage status ;;
+            7) headless_manage status ;;
+            8) workspace_guard_manage status ;;
+            9) stack_manage tui ;;
+            10) env_manage list; echo "(set/get/unset 见 linxira-config env help)" ;;
+            11) stack_manage list ;;
+            12) command -v linxira-recovery-diagnostics >/dev/null && linxira-recovery-diagnostics --help | head -8 || warn "未安装 linxira-recovery-diagnostics" ;;
+            q|Q|0|*) break ;;
+        esac
+        echo
+        read -rp "回车返回菜单…" _ || break
+    done
+}
+
+# ── 无头服务器模式（桌面零占用, 内存全给计算）──
+headless_manage() {
+    local action="${1:-help}"
+    case "$action" in
+        on)
+            require_root
+            systemctl set-default multi-user.target >/dev/null 2>&1
+            success "无头模式已开启: 下次启动桌面不加载"
+            if [ "${2:-now}" = "now" ]; then
+                # 2026-08-13: 立即切换会终止当前桌面会话, 交互确认防止未保存数据丢失
+                if [ -t 0 ]; then
+                    read -rp "立即切换将退出桌面会话(未保存的数据会丢失)。继续? [y/N] " confirm
+                    [[ "${confirm,,}" =~ ^y ]] || { success "已取消, 桌面将在下次启动时不加载"; return 0; }
+                fi
+                systemctl isolate multi-user.target >/dev/null 2>&1
+                success "已立即切换到无头模式 (桌面已停止, 内存全给计算)"
+            fi
+            echo "提示: SSH 访问已开启时可用局域网连接; 恢复桌面运行: linxira-config headless off"
+            ;;
+        off)
+            require_root
+            systemctl set-default graphical.target >/dev/null 2>&1
+            success "桌面模式已恢复: 下次启动进入 KDE"
+            if [ "${2:-now}" = "now" ]; then
+                systemctl isolate graphical.target >/dev/null 2>&1
+                success "已立即恢复桌面"
+            fi
+            ;;
+        status)
+            echo "默认启动目标: $(systemctl get-default 2>/dev/null)"
+            case "$(systemctl get-default 2>/dev/null)" in
+                multi-user.target) echo "状态: 无头模式 (桌面不启动, 内存全给计算)";;
+                graphical.target) echo "状态: 桌面模式 (KDE Plasma 正常)";;
+                *) echo "状态: 未知";;
+            esac
+            ;;
+        help|*)
+            echo "Usage: linxira-config headless <on|off|status> [now]"
+            echo "  on       开启无头模式 (切 multi-user.target, 桌面零占用)"
+            echo "  on now   立即切换 (无需重启)"
+            echo "  off      恢复桌面模式 (graphical.target)"
+            echo "  off now  立即恢复桌面"
+            echo "  status   查看当前模式"
+            ;;
+    esac
+}
+
+conda_manage() {
+    case "${1:-channels}" in
+        channels)
+            case "${2:-list}" in
+                list) conda_channels_list ;;
+                add) conda_channels_add "${3:-}" ;;
+                remove) conda_channels_remove "${3:-}" ;;
+                reset) conda_channels_reset ;;
+                *) error "Unknown channel action: ${2:-} (use list/add/remove/reset)" ;;
+            esac
+            ;;
+        *) error "Unknown Miniforge action: ${1:-} (use channels)" ;;
+    esac
+}
+
+# ─── Source Management ───────────────────────────────────────
+
+source_list() {
+    header "Package Sources"
+    echo "  1. Arch Linux official repositories (enabled)"
+    echo "  2. Linxira signed repository (enabled when a trusted keyring is installed)"
+    echo "  3. AUR source builds (disabled by default; explicit user opt-in)"
+    echo "  4. Flatpak remotes (disabled by default)"
+    echo "  5. npm and PyPI indexes (per-user configuration)"
+    echo "  6. Runtime managers: Nix, uv, npm, Cargo, Go modules, Conda (opt-in)"
+    echo "  7. WISE: not installed; no verified package or implementation is present"
+    echo ""
+}
+
+# ─── Catalog Queries ─────────────────────────────────────────
+
+catalog_require() {
+    command -v jq >/dev/null || error "jq is required to read the Linxira catalog"
+    [[ -r $CATALOG_PATH ]] || error "Linxira catalog not found: $CATALOG_PATH"
+    jq -e '(.catalogVersion == 2 or .catalogVersion == 3) and (.sources | type == "array") and (.applications | type == "array")' \
+        "$CATALOG_PATH" >/dev/null || error "The Linxira catalog is invalid"
+}
+
+catalog_collection() {
+    case "$1" in
+        software) printf '%s\n' '(.software // .applications // [])' ;;
+        component) printf '%s\n' '(.components // .profiles // [])' ;;
+        bundle) printf '%s\n' '(.bundles // .desktopBundles // [])' ;;
+        *) error "Unknown catalog kind: $1 (use software/component/bundle)" ;;
+    esac
+}
+
+catalog_validate_status() {
+    case "$1" in
+        installed|partial|external|pending|drifted|reboot-required|not-installed|unavailable) ;;
+        *) error "Unknown catalog status: $1" ;;
+    esac
+}
+
+catalog_state_require() {
+    [[ -e $CATALOG_STATE_PATH ]] || return 0
+    [[ -f $CATALOG_STATE_PATH && ! -L $CATALOG_STATE_PATH && -r $CATALOG_STATE_PATH ]] || \
+        error "Catalog state must be a readable regular file: $CATALOG_STATE_PATH"
+    jq -e '
+        .catalogStateVersion == 1 and (.items | type == "array") and
+        all(.items[];
+            (.kind | IN("software", "component", "bundle")) and
+            (.id | type == "string") and
+            (.status | IN("installed", "partial", "external", "pending", "drifted", "reboot-required", "not-installed", "unavailable")))
+    ' "$CATALOG_STATE_PATH" >/dev/null || error "The Linxira catalog state file is invalid"
+}
+
+catalog_explicit_status() {
+    local kind=$1 id=$2
+    [[ -f $CATALOG_STATE_PATH ]] || return 0
+    jq -er --arg kind "$kind" --arg id "$id" \
+        '[.items[] | select(.kind == $kind and .id == $id)][-1].status // empty' \
+        "$CATALOG_STATE_PATH" 2>/dev/null || true
+}
+
+catalog_observed_status() {
+    local packages=$1 installed_file=$2 package total=0 installed=0
+    IFS=',' read -r -a package_list <<<"$packages"
+    for package in "${package_list[@]}"; do
+        [[ -n $package ]] || continue
+        ((total += 1))
+        grep -Fqx -- "$package" "$installed_file" && ((installed += 1)) || true
+    done
+    if ((total == 0 || installed == 0)); then
+        printf '%s\n' not-installed
+    elif ((installed == total)); then
+        printf '%s\n' external
+    else
+        printf '%s\n' partial
+    fi
+}
+
+catalog_records() {
+    local kind=$1 collection
+    collection=$(catalog_collection "$kind")
+    jq -r "$collection | .[] | [.id, (.name.en // .name // .id), (.source // .provider // \"arch\"), (((.artifact.ids // .packages // []) | map(select(type == \"string\"))) | join(\",\"))] | @tsv" \
+        "$CATALOG_PATH"
+}
+
+catalog_list() {
+    local kind=$1 mode=${2:-default} requested_status=${3:-} installed_file id name source packages status
+    catalog_require
+    catalog_state_require
+    installed_file=$(mktemp)
+    command -v pacman >/dev/null 2>&1 && pacman -Qq >"$installed_file" 2>/dev/null || true
+    header "Catalog ${kind^}"
+    while IFS=$'\t' read -r id name source packages; do
+        [[ -n $id ]] || continue
+        status=$(catalog_explicit_status "$kind" "$id")
+        [[ -n $status ]] || status=$(catalog_observed_status "$packages" "$installed_file")
+        if [[ $mode == status ]]; then
+            [[ $status == "$requested_status" ]] || continue
+        elif [[ $mode != all ]]; then
+            case "$status" in
+                installed|partial|external|pending|drifted|reboot-required) ;;
+                *) continue ;;
+            esac
+        fi
+        printf '  %-12s %-18s %-12s %s\n' "$status" "$id" "$source" "$name"
+    done < <(catalog_records "$kind")
+    rm -f -- "$installed_file"
+}
+
+catalog_show() {
+    local kind=$1 id=$2 collection
+    catalog_require
+    [[ $id =~ ^[a-z0-9-]+$ ]] || error "Invalid catalog ID: $id"
+    collection=$(catalog_collection "$kind")
+    jq -er --arg id "$id" "$collection | map(select(.id == \$id)) | if length == 1 then .[0] else error(\"unknown catalog ID\") end" \
+        "$CATALOG_PATH" || error "Unknown $kind: $id"
+}
+
+catalog_manage() {
+    local kind=${1:-} action=${2:-list} option=${3:-} value=${4:-}
+    catalog_collection "$kind" >/dev/null
+    case "$action" in
+        list)
+            case "$option" in
+                '') catalog_list "$kind" ;;
+                --all) [[ -z $value ]] || error "Unexpected catalog argument: $value"; catalog_list "$kind" all ;;
+                --status) [[ -n $value ]] || error "Specify a catalog status"; catalog_validate_status "$value"; catalog_list "$kind" status "$value" ;;
+                *) error "Unknown catalog option: $option (use --all or --status <state>)" ;;
+            esac
+            ;;
+        --all) [[ -z $option ]] || error "Unexpected catalog argument: $option"; catalog_list "$kind" all ;;
+        --status) [[ -n $option ]] || error "Specify a catalog status"; catalog_validate_status "$option"; catalog_list "$kind" status "$option" ;;
+        show) [[ -n $option && -z $value ]] || error "Use: linxira-config catalog $kind show <id>"; catalog_show "$kind" "$option" ;;
+        *) error "Unknown catalog action: $action (use list/show/--all/--status)" ;;
+    esac
+}
+
+# ─── Service Management ──────────────────────────────────────
+
+service_manage() {
+    local name=$1
+    local action=$2
+
+    case "$name" in
+        ssh)
+            if [ "$action" = "on" ] || [ "$action" = "enable" ]; then
+                sudo systemctl enable --now sshd
+                success "SSH service enabled and started"
+            elif [ "$action" = "off" ] || [ "$action" = "disable" ]; then
+                sudo systemctl disable --now sshd
+                success "SSH service disabled"
+            else
+                error "Unknown action: $action (use on/off)"
+            fi
+            ;;
+        vnc)
+            if [ "$action" = "on" ] || [ "$action" = "enable" ]; then
+                require_root
+                error "VNC is not available: a per-user TigerVNC session and firewall policy must be implemented first"
+            elif [ "$action" = "off" ] || [ "$action" = "disable" ]; then
+                sudo systemctl disable --now vncserver@:1
+                success "VNC service disabled"
+            fi
+            ;;
+        *)
+            error "Unknown service: $name (supported: ssh, vnc)"
+            ;;
+    esac
+}
+
+# ─── Security ────────────────────────────────────────────────
+
+security_status() {
+    header "Security Posture"
+
+    # UFW
+    if command -v ufw &>/dev/null; then
+        local ufw_status
+        ufw_status=$(sudo ufw status 2>/dev/null | head -1) || true
+        if echo "$ufw_status" | grep -q "active"; then
+            success "UFW Firewall: ACTIVE"
+        else
+            warn "UFW Firewall: INACTIVE"
+        fi
+    else
+        warn "UFW: NOT INSTALLED"
+    fi
+
+    # SSH
+    if systemctl is-active sshd &>/dev/null; then
+        warn "SSH Server: RUNNING (port $(grep -E '^Port' /etc/ssh/sshd_config 2>/dev/null | awk '{print $2}' || echo 22))"
+    else
+        success "SSH Server: STOPPED"
+    fi
+
+    # fail2ban
+    if systemctl is-active fail2ban &>/dev/null; then
+        success "fail2ban: ACTIVE"
+    else
+        warn "fail2ban: INACTIVE"
+    fi
+
+    # Docker
+    if systemctl is-active docker &>/dev/null; then
+        info "Docker: RUNNING"
+    else
+        info "Docker: STOPPED"
+    fi
+
+    # KVM
+    if [ -e /dev/kvm ]; then
+        info "KVM: AVAILABLE"
+    else
+        info "KVM: NOT AVAILABLE"
+    fi
+
+    # Automatic updates (Linxira's own timer, then pacman-contrib's paccache.timer)
+    if systemctl is-active --quiet linxira-update.timer 2>/dev/null || \
+       systemctl is-active --quiet paccache.timer 2>/dev/null; then
+        success "Auto-updates: ACTIVE"
+    else
+        warn "Auto-updates: INACTIVE"
+    fi
+
+    echo ""
+}
+
+security_harden() {
+    header "Applying Security Hardening"
+    require_root
+
+    # 1. Enable UFW
+    info "Configuring firewall..."
+    if ! command -v ufw &>/dev/null; then
+        pacman -S --noconfirm ufw
+    fi
+    ufw default deny incoming
+    ufw default allow outgoing
+    ufw allow ssh
+    ufw --force enable
+    success "UFW enabled: deny incoming, allow outgoing, allow SSH"
+
+    # 2. Install & configure fail2ban
+    info "Installing fail2ban..."
+    if ! command -v fail2ban-server &>/dev/null; then
+        pacman -S --noconfirm fail2ban
+    fi
+    cat > /etc/fail2ban/jail.local << 'JAIL'
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 5
+backend = systemd
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+maxretry = 5
+bantime = 3600
+JAIL
+    systemctl enable --now fail2ban
+    success "fail2ban configured (SSH: 5 retries -> 1h ban)"
+
+    # 3. Kernel hardening
+    info "Applying kernel hardening..."
+    cat > /etc/sysctl.d/99-linxira-security.conf << 'SYSCTL'
+# Linxira OS Security Hardening (moderate)
+
+# Ignore ICMP redirects (prevent MITM)
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+
+# Ignore source-routed packets
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+
+# Enable SYN flood protection
+net.ipv4.tcp_syncookies = 1
+
+# Log Martian packets (spoofed source addresses)
+net.ipv4.conf.all.log_martians = 1
+net.ipv4.conf.default.log_martians = 1
+
+# Disable IPv6 router advertisements
+net.ipv6.conf.all.accept_ra = 0
+net.ipv6.conf.default.accept_ra = 0
+
+# Restrict dmesg to root only
+kernel.dmesg_restrict = 1
+
+# perf_event_paranoid=1 allows perf for root, =2 allows non-root too
+# Default is 4 on Arch; 1 is a good balance for scientific work
+kernel.perf_event_paranoid = 1
+SYSCTL
+    sysctl --system >/dev/null 2>&1
+    success "Kernel hardening applied"
+
+    # 4. File permissions
+    info "Tightening file permissions..."
+    chmod 700 /root 2>/dev/null || true
+    chmod 600 /etc/shadow 2>/dev/null || true
+    chmod 600 /etc/gshadow 2>/dev/null || true
+    success "Critical file permissions tightened"
+
+    echo ""
+    header "Security Hardening Complete"
+    echo "  - UFW firewall: enabled (deny incoming)"
+    echo "  - fail2ban: active (SSH brute-force protection)"
+    echo "  - Kernel: hardened (ICMP, SYN flood, ptrace restrictions)"
+    echo "  - File permissions: tightened"
+    echo ""
+    echo "  ${YELLOW}Optional:${NC} linxira-config ssh on   (enable remote access)"
+    echo "  ${YELLOW}Optional:${NC} linxira-config rdp on  (enable remote desktop)"
+    echo "  ${YELLOW}Optional:${NC} linxira-config virt kvm-on (enable virtualization)"
+    echo ""
+}
+
+# ─── UFW Management ──────────────────────────────────────────
+
+ufw_manage() {
+    local action=${1:-status}
+
+    case $action in
+        on|enable)
+            require_root
+            if ! command -v ufw &>/dev/null; then
+                sudo pacman -S --noconfirm ufw
+            fi
+            sudo ufw default deny incoming
+            sudo ufw default allow outgoing
+            sudo ufw allow ssh
+            sudo ufw --force enable
+            success "UFW enabled"
+            ;;
+        off|disable)
+            require_root
+            sudo ufw disable
+            success "UFW disabled"
+            ;;
+        status)
+            if command -v ufw &>/dev/null; then
+                sudo ufw status verbose
+            else
+                warn "UFW not installed"
+            fi
+            ;;
+        allow)
+            local port=${2:-}
+            [ -z "$port" ] && error "Please specify a port: linxira-config security ufw allow <port>"
+            validate_port "$port"
+            require_root
+            sudo ufw allow "$port"
+            success "Port $port allowed through firewall"
+            ;;
+        *)
+            error "Unknown UFW action: $action (use on/off/status/allow)"
+            ;;
+    esac
+}
+
+# ─── SSH Management ──────────────────────────────────────────
+
+ssh_target_context() {
+    SSH_TARGET_USER=$(target_user)
+    [[ -n $SSH_TARGET_USER ]] || error "Unable to determine the target user"
+    SSH_TARGET_HOME=$(getent passwd "$SSH_TARGET_USER" | cut -d: -f6) || true
+    [[ -n $SSH_TARGET_HOME && $SSH_TARGET_HOME == /* ]] || error "Unable to determine the target user's home"
+    SSH_DIR=$SSH_TARGET_HOME/.ssh
+    [[ ! -L $SSH_DIR ]] || error "Refusing to use a symlinked SSH directory: $SSH_DIR"
+}
+
+ssh_prepare_dir() {
+    ssh_target_context
+    if [[ ! -e $SSH_DIR ]]; then
+        mkdir -m 700 -- "$SSH_DIR"
+    fi
+    [[ -d $SSH_DIR && ! -L $SSH_DIR ]] || error "SSH path is not a regular directory: $SSH_DIR"
+    chmod 700 -- "$SSH_DIR"
+    [[ $(id -u) -ne 0 ]] || chown "$SSH_TARGET_USER" -- "$SSH_DIR"
+}
+
+ssh_validate_key_name() {
+    local name=$1
+    [[ $name =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ && $name != '.' && $name != '..' ]] || \
+        error "Invalid SSH key name: $name"
+}
+
+ssh_public_key_file() {
+    local name=$1 path
+    ssh_validate_key_name "$name"
+    ssh_target_context
+    path=$SSH_DIR/$name.pub
+    [[ -f $path && ! -L $path ]] || error "SSH public key not found: $name"
+    printf '%s\n' "$path"
+}
+
+ssh_key_list() {
+    local public found=false
+    command -v ssh-keygen >/dev/null || error "ssh-keygen is required"
+    ssh_target_context
+    header "SSH Public Keys"
+    [[ -d $SSH_DIR ]] || { info "No SSH keys found"; return; }
+    for public in "$SSH_DIR"/*.pub; do
+        [[ -f $public && ! -L $public ]] || continue
+        found=true
+        printf '  %-24s %s\n' "$(basename "$public" .pub)" "$(ssh-keygen -lf "$public")"
+    done
+    $found || info "No SSH keys found"
+}
+
+ssh_key_show() {
+    local public
+    public=$(ssh_public_key_file "${1:-id_ed25519}")
+    cat -- "$public"
+}
+
+ssh_key_fingerprint() {
+    local public
+    public=$(ssh_public_key_file "${1:-id_ed25519}")
+    ssh-keygen -lf "$public"
+}
+
+ssh_key_generate() {
+    local name=${1:-id_ed25519} private public
+    command -v ssh-keygen >/dev/null || error "ssh-keygen is required"
+    ssh_validate_key_name "$name"
+    ssh_prepare_dir
+    private=$SSH_DIR/$name
+    public=$private.pub
+    [[ ! -e $private && ! -L $private && ! -e $public && ! -L $public ]] || \
+        error "SSH key already exists: $name"
+    ssh-keygen -q -t ed25519 -C "linxira@$(hostname)" -f "$private"
+    chmod 600 -- "$private"
+    chmod 644 -- "$public"
+    if [[ $(id -u) -eq 0 ]]; then
+        chown "$SSH_TARGET_USER" -- "$private" "$public"
+    fi
+    success "SSH key generated: $private"
+    cat -- "$public"
+}
+
+ssh_key_remove() {
+    local name=${1:-} confirmation=${2:-} private public
+    [[ -n $name ]] || error "Specify an SSH key name"
+    [[ $confirmation == --yes ]] || error "SSH key removal requires --yes"
+    ssh_validate_key_name "$name"
+    ssh_target_context
+    private=$SSH_DIR/$name
+    public=$private.pub
+    [[ ! -L $private && ! -L $public ]] || error "Refusing to remove a symlinked SSH key"
+    [[ -f $private || -f $public ]] || error "SSH key not found: $name"
+    [[ ! -e $private || -f $private ]] || error "SSH private key path is not a regular file"
+    [[ ! -e $public || -f $public ]] || error "SSH public key path is not a regular file"
+    rm -f -- "$private" "$public"
+    success "SSH key removed: $name"
+}
+
+ssh_key_manage() {
+    local action=${1:-list}
+    case "$action" in
+        list) [[ $# -eq 1 ]] || error "Use: linxira-config ssh key list"; ssh_key_list ;;
+        show) [[ $# -le 2 ]] || error "Use: linxira-config ssh key show [name]"; ssh_key_show "${2:-}" ;;
+        fingerprint) [[ $# -le 2 ]] || error "Use: linxira-config ssh key fingerprint [name]"; ssh_key_fingerprint "${2:-}" ;;
+        generate) [[ $# -le 2 ]] || error "Use: linxira-config ssh key generate [name]"; ssh_key_generate "${2:-}" ;;
+        remove) [[ $# -eq 3 ]] || error "Use: linxira-config ssh key remove <name> --yes"; ssh_key_remove "$2" "$3" ;;
+        *) error "Unknown SSH key action: $action (use list/show/fingerprint/generate/remove)" ;;
+    esac
+}
+
+ssh_authorized_file() {
+    ssh_prepare_dir
+    SSH_AUTHORIZED_FILE=$SSH_DIR/authorized_keys
+    [[ ! -L $SSH_AUTHORIZED_FILE ]] || error "Refusing to use a symlinked authorized_keys file"
+    [[ ! -e $SSH_AUTHORIZED_FILE || -f $SSH_AUTHORIZED_FILE ]] || \
+        error "authorized_keys is not a regular file"
+}
+
+ssh_authorized_list() {
+    local line fingerprint form found=false
+    command -v ssh-keygen >/dev/null || error "ssh-keygen is required"
+    ssh_authorized_file
+    header "Authorized SSH Keys"
+    [[ -f $SSH_AUTHORIZED_FILE ]] || { info "No authorized keys found"; return; }
+    while IFS= read -r line || [[ -n $line ]]; do
+        [[ -n $line && $line != '#'* ]] || continue
+        fingerprint=$(printf '%s\n' "$line" | ssh-keygen -lf - 2>/dev/null) || continue
+        form=optioned
+        [[ $line =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521)[[:space:]]+[A-Za-z0-9+/]+={0,2}([[:space:]].*)?$ ]] && form=plain
+        found=true
+        printf '  %-9s %s\n' "[$form]" "$fingerprint"
+    done <"$SSH_AUTHORIZED_FILE"
+    $found || info "No plain authorized keys found"
+}
+
+ssh_authorized_add() {
+    local source=${1:-} line extra temp
+    [[ -n $source ]] || error "Specify a public key file"
+    command -v ssh-keygen >/dev/null || error "ssh-keygen is required"
+    [[ -f $source && ! -L $source && -r $source ]] || error "Public key must be a readable regular file"
+    IFS= read -r line <"$source" || true
+    extra=$(tail -n +2 -- "$source" | grep -cv '^[[:space:]]*$' || true)
+    [[ $extra -eq 0 ]] || error "Public key file must contain exactly one key"
+    [[ $line =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521)[[:space:]]+[A-Za-z0-9+/]+={0,2}([[:space:]].*)?$ ]] || \
+        error "Only plain SSH public keys without authorized_keys options are accepted"
+    printf '%s\n' "$line" | ssh-keygen -lf - >/dev/null 2>&1 || error "Invalid SSH public key"
+    ssh_authorized_file
+    if [[ -f $SSH_AUTHORIZED_FILE ]] && grep -Fqx -- "$line" "$SSH_AUTHORIZED_FILE"; then
+        info "SSH public key is already authorized"
+        return
+    fi
+    temp=$(mktemp "$SSH_DIR/.authorized_keys.XXXXXX")
+    trap 'rm -f -- "$temp"' RETURN
+    [[ ! -f $SSH_AUTHORIZED_FILE ]] || cat -- "$SSH_AUTHORIZED_FILE" >"$temp"
+    printf '%s\n' "$line" >>"$temp"
+    chmod 600 -- "$temp"
+    [[ $(id -u) -ne 0 ]] || chown "$SSH_TARGET_USER" -- "$temp"
+    mv -fT -- "$temp" "$SSH_AUTHORIZED_FILE"
+    success "SSH public key authorized"
+}
+
+ssh_authorized_remove() {
+    local wanted=${1:-} confirmation=${2:-} line fingerprint current temp removed=false
+    [[ $wanted =~ ^SHA256:[A-Za-z0-9+/]+={0,2}$ ]] || error "Specify a valid SHA256 SSH fingerprint"
+    [[ $confirmation == --yes ]] || error "Authorized key removal requires --yes"
+    command -v ssh-keygen >/dev/null || error "ssh-keygen is required"
+    ssh_authorized_file
+    [[ -f $SSH_AUTHORIZED_FILE ]] || error "No authorized keys found"
+    temp=$(mktemp "$SSH_DIR/.authorized_keys.XXXXXX")
+    trap 'rm -f -- "$temp"' RETURN
+    while IFS= read -r line || [[ -n $line ]]; do
+        fingerprint=$(printf '%s\n' "$line" | ssh-keygen -lf - 2>/dev/null || true)
+        current=$(awk '{print $2}' <<<"$fingerprint")
+        if [[ $current == "$wanted" ]]; then
+            removed=true
+        else
+            printf '%s\n' "$line" >>"$temp"
+        fi
+    done <"$SSH_AUTHORIZED_FILE"
+    $removed || error "Authorized key fingerprint not found: $wanted"
+    chmod 600 -- "$temp"
+    [[ $(id -u) -ne 0 ]] || chown "$SSH_TARGET_USER" -- "$temp"
+    mv -fT -- "$temp" "$SSH_AUTHORIZED_FILE"
+    success "Authorized SSH key removed: $wanted"
+}
+
+ssh_authorized_manage() {
+    local action=${1:-list}
+    case "$action" in
+        list) [[ $# -eq 1 ]] || error "Use: linxira-config ssh authorized list"; ssh_authorized_list ;;
+        add) [[ $# -eq 2 ]] || error "Use: linxira-config ssh authorized add <public-key-file>"; ssh_authorized_add "$2" ;;
+        remove) [[ $# -eq 3 ]] || error "Use: linxira-config ssh authorized remove <fingerprint> --yes"; ssh_authorized_remove "$2" "$3" ;;
+        *) error "Unknown authorized key action: $action (use list/add/remove)" ;;
+    esac
+}
+
+ssh_effective_config() {
+    local key=$1 value
+    if command -v sshd >/dev/null 2>&1; then
+        value=$(sshd -T 2>/dev/null | awk -v key="$key" '$1 == key { print $2; exit }') || true
+    fi
+    case "$key" in
+        port) printf '%s\n' "${value:-22}" ;;
+        permitrootlogin) printf '%s\n' "${value:-unknown}" ;;
+        passwordauthentication) printf '%s\n' "${value:-unknown}" ;;
+    esac
+}
+
+ssh_status() {
+    local active=inactive enabled=disabled port root_login password_auth ip
+    systemctl is-active --quiet sshd 2>/dev/null && active=active
+    enabled=$(systemctl is-enabled sshd 2>/dev/null || true)
+    enabled=${enabled:-disabled}
+    port=$(ssh_effective_config port)
+    root_login=$(ssh_effective_config permitrootlogin)
+    password_auth=$(ssh_effective_config passwordauthentication)
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}' 2>/dev/null) || true
+    if [ "${SSH_STATUS_JSON:-}" = "1" ]; then
+        jq -nc --arg state "$active" --arg startup "$enabled" --argjson port "$port" \
+            --arg root_login "$root_login" --arg password_auth "$password_auth" \
+            --arg ip "${ip:-}" \
+            '{service_state: $state, service_startup: $startup, port: $port,
+              root_login: $root_login, password_authentication: $password_auth,
+              address: (if $ip == "" then null else $ip end)}'
+        return 0
+    fi
+    header "SSH Status"
+    printf '  %-24s %s\n' "Service state:" "$active"
+    printf '  %-24s %s\n' "Service startup:" "$enabled"
+    printf '  %-24s %s\n' "Port:" "$port"
+    printf '  %-24s %s\n' "Root login:" "$root_login"
+    printf '  %-24s %s\n' "Password authentication:" "$password_auth"
+    [[ $active != active ]] || printf '  %-24s ssh user@%s -p %s\n' "Connect:" "${ip:-<ip>}" "$port"
+}
+
+ssh_manage() {
+    local action=${1:-status}
+    shift || true
+
+    case $action in
+        status)
+            [ "${1:-}" = "--json" ] && export SSH_STATUS_JSON=1
+            ssh_status
+            ;;
+        on|enable|start)
+            require_root
+            sudo systemctl enable --now sshd
+            # Ensure UFW allows SSH
+            if command -v ufw &>/dev/null && sudo ufw status | grep -q "active"; then
+                sudo ufw allow ssh 2>/dev/null || true
+            fi
+            local port
+            port=$(ssh_effective_config port)
+            success "SSH enabled on port $port"
+            ;;
+        off|disable|stop)
+            require_root
+            sudo systemctl disable --now sshd
+            success "SSH disabled"
+            ;;
+        status)
+            ssh_status
+            ;;
+        port)
+            local port=${1:-}
+            [ -z "$port" ] && error "Please specify a port number"
+            validate_port "$port"
+            require_root
+            # sshd_config 可能没有任何 Port 行（最小化配置）：有则替换，无则追加，
+            # 避免 sed 无匹配时静默失效却报成功。
+            if sudo grep -qE '^#?[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config; then
+                sudo sed -i -E "s/^#?[[:space:]]*Port[[:space:]].*/Port $port/" /etc/ssh/sshd_config
+            else
+                printf 'Port %s\n' "$port" | sudo tee -a /etc/ssh/sshd_config >/dev/null
+            fi
+            if command -v ufw &>/dev/null && sudo ufw status | grep -q "active"; then
+                sudo ufw allow "$port/tcp"
+            fi
+            sudo systemctl restart sshd
+            success "SSH port changed to $port"
+            ;;
+        key) if (($#)); then ssh_key_manage "$@"; else ssh_key_manage list; fi ;;
+        authorized) if (($#)); then ssh_authorized_manage "$@"; else ssh_authorized_manage list; fi ;;
+        keygen|keyshow)
+            error "Legacy SSH key action removed; use 'ssh key generate' or 'ssh key show'"
+            ;;
+        *)
+            error "Unknown SSH action: $action (use on/off/status/port/key/authorized)"
+            ;;
+    esac
+}
+
+# ─── Remote Desktop ──────────────────────────────────────────
+
+rdp_manage() {
+    local action=${1:-on}
+
+    case $action in
+        on|enable)
+            require_root
+            error "RDP is not available: xrdp is not present in Linxira's signed repositories"
+            ;;
+        off|disable)
+            require_root
+            sudo systemctl disable --now xrdp
+            success "RDP disabled"
+            ;;
+        vnc-on)
+            require_root
+            error "VNC is not available: a per-user TigerVNC session and firewall policy must be implemented first"
+            ;;
+        vnc-off)
+            require_root
+            sudo systemctl disable --now vncserver@:1
+            success "VNC disabled"
+            ;;
+        *)
+            error "Unknown RDP action: $action (use on/off/vnc-on/vnc-off)"
+            ;;
+    esac
+}
+
+# ─── Virtualization ──────────────────────────────────────────
+
+virt_manage() {
+    local action=${1:-status}
+
+    case $action in
+        status)
+            header "Virtualization Support"
+            # CPU virtualization support
+            if grep -qE 'vmx|svm' /proc/cpuinfo; then
+                success "CPU virtualization: ENABLED (VT-x/AMD-V)"
+            else
+                warn "CPU virtualization: NOT AVAILABLE (enable in BIOS)"
+            fi
+
+            # KVM
+            if [ -e /dev/kvm ]; then
+                success "KVM: AVAILABLE"
+            else
+                warn "KVM: NOT LOADED"
+            fi
+
+            # QEMU
+            if command -v qemu-system-x86_64 &>/dev/null; then
+                info "QEMU: INSTALLED ($(qemu-system-x86_64 --version | head -1))"
+            else
+                info "QEMU: NOT INSTALLED"
+            fi
+
+            # Docker
+            if command -v docker &>/dev/null; then
+                info "Docker: INSTALLED ($(docker --version | awk '{print $3}' | tr -d ','))"
+            else
+                info "Docker: NOT INSTALLED"
+            fi
+
+            # Podman
+            if command -v podman &>/dev/null; then
+                info "Podman: INSTALLED ($(podman --version | awk '{print $2}'))"
+            else
+                info "Podman: NOT INSTALLED"
+            fi
+            echo ""
+            ;;
+        kvm-on)
+            require_root
+            info "Enabling KVM/QEMU..."
+            sudo pacman -S --noconfirm qemu-full virt-manager virt-viewer dnsmasq vde2 bridge-utils libvirt
+            sudo systemctl enable --now libvirtd
+            user=$(target_user)
+            [[ -n $user ]] && sudo usermod -aG libvirt "$user" 2>/dev/null || true
+            sudo sed -i 's/^#unix_sock_group/unix_sock_group/' /etc/libvirt/libvirtd.conf 2>/dev/null || true
+            success "KVM/QEMU enabled. Log out and back in for group changes."
+            ;;
+        docker-on)
+            require_root
+            info "Installing Docker..."
+            sudo pacman -S --noconfirm docker
+            sudo systemctl enable --now docker
+            user=$(target_user)
+            [[ -n $user ]] && sudo usermod -aG docker "$user" 2>/dev/null || true
+            if command -v ufw &>/dev/null && sudo ufw status | grep -q "active"; then
+                sudo ufw allow 2376/tcp 2>/dev/null || true
+            fi
+            success "Docker enabled. Log out and back in for group changes."
+            ;;
+        podman-on)
+            require_root
+            info "Enabling Podman..."
+            sudo systemctl enable --now podman.socket 2>/dev/null || true
+            success "Podman enabled"
+            ;;
+        *)
+            error "Unknown virt action: $action (use status/kvm-on/docker-on/podman-on)"
+            ;;
+    esac
+}
+
+# ─── GPU Management ──────────────────────────────────────────
+
+gpu_action() {
+    case ${1:-info} in
+        info)
+            header "GPU Information"
+            lspci | grep -E "VGA|3D" | awk -F': ' '{print "  " $2}'
+            echo ""
+            if pacman -Q nvidia-utils &>/dev/null 2>&1; then
+                info "NVIDIA driver: $(pacman -Q nvidia-utils | awk '{print $2}')"
+            fi
+            if pacman -Q mesa &>/dev/null 2>&1; then
+                info "Mesa: $(pacman -Q mesa | awk '{print $2}')"
+            fi
+            ;;
+        *)
+            error "Unknown GPU action: $1 (use info)"
+            ;;
+    esac
+}
+
+# ─── Power Management ───────────────────────────────────────
+
+power_manage() {
+    local action=${1:-status}
+
+    case $action in
+        status)
+            header "Power Settings"
+            # Sleep/suspend
+            local sleep_val=$(cat /etc/systemd/sleep.conf 2>/dev/null | grep "^#HandleSuspendKey\|^HandleSuspendKey" | awk -F= '{print $2}' | xargs || echo "suspend")
+            local lid_val=$(cat /etc/systemd/sleep.conf 2>/dev/null | grep "^#HandleLidSwitch\|^HandleLidSwitch" | awk -F= '{print $2}' | xargs || echo "suspend")
+            info "Suspend on sleep key: $sleep_val"
+            info "Suspend on lid close: $lid_val"
+
+            # Screen blanking
+            local blanking
+            if grep -rq "Blanking" /etc/sddm.conf.d/ 2>/dev/null; then
+                blanking="configured"
+            else
+                blanking="default"
+            fi
+            info "Screen blanking: $blanking"
+
+            # Sleep mask
+            local masked=$(systemctl is-masked sleep.target 2>/dev/null || echo "not masked")
+            if [ "$masked" = "masked" ]; then
+                info "sleep.target: MASKED (disabled)"
+            else
+                info "sleep.target: active"
+            fi
+            echo ""
+            ;;
+        nosleep)
+            require_root
+            info "Disabling auto-sleep/suspend..."
+            sudo sed -i 's/^#HandleSuspendKey=.*/HandleSuspendKey=ignore/' /etc/systemd/sleep.conf 2>/dev/null || true
+            sudo sed -i 's/^HandleSuspendKey=.*/HandleSuspendKey=ignore/' /etc/systemd/sleep.conf 2>/dev/null || true
+            sudo sed -i 's/^#HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/systemd/sleep.conf 2>/dev/null || true
+            sudo sed -i 's/^HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/systemd/sleep.conf 2>/dev/null || true
+            # Also mask sleep targets
+            sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
+            success "Auto-sleep and suspend disabled"
+            ;;
+        nosuspend)
+            require_root
+            info "Disabling suspend on lid close..."
+            sudo sed -i 's/^#HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/systemd/sleep.conf 2>/dev/null || true
+            sudo sed -i 's/^HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/systemd/sleep.conf 2>/dev/null || true
+            success "Lid close suspend disabled"
+            ;;
+        noscreen)
+            require_root
+            info "Disabling screen blanking..."
+            # KDE/Plasma
+            local user home kwrite
+            user=$(target_user)
+            home=$(getent passwd "$user" 2>/dev/null | cut -d: -f6 || true)
+            kwrite=$(command -v kwriteconfig6 || command -v kwriteconfig5 || true)
+            if [[ -n $kwrite && -n $user && -n $home ]]; then
+                sudo -u "$user" env HOME="$home" "$kwrite" --file kscreenlockerrc --group Daemon --key Autolock false
+                sudo -u "$user" env HOME="$home" "$kwrite" --file kscreenlockerrc --group Daemon --key Timeout 0
+            fi
+            # SDDM
+            sudo mkdir -p /etc/sddm.conf.d
+            echo -e "[General]\nGreeterEnv=QT_SCREEN_SCALE_FACTORS=1" | sudo tee /etc/sddm.conf.d/no-blank.conf >/dev/null
+            success "Screen blanking disabled"
+            ;;
+        restore)
+            require_root
+            info "Restoring default power settings..."
+            sudo cp /etc/systemd/sleep.conf /etc/systemd/sleep.conf.bak 2>/dev/null || true
+            sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
+            sudo sed -i 's/^HandleSuspendKey=.*/#HandleSuspendKey=suspend/' /etc/systemd/sleep.conf 2>/dev/null || true
+            sudo sed -i 's/^HandleLidSwitch=.*/#HandleLidSwitch=suspend/' /etc/systemd/sleep.conf 2>/dev/null || true
+            success "Default power settings restored"
+            ;;
+        *)
+            error "Unknown power action: $action (use status/nosleep/nosuspend/noscreen/restore)"
+            ;;
+    esac
+}
+
+# ─── Network Diagnostics ────────────────────────────────────
+
+net_diag_json() {
+    # 人读输出一大段解释文字, agent 只需要这些事实。
+    local networkmanager=inactive networkd=inactive gateway=none resolve=false
+    local ping_ip=false ping_host=false firewall=none nameservers='[]'
+    systemctl is-active --quiet NetworkManager &>/dev/null && networkmanager=active
+    systemctl is-active --quiet systemd-networkd &>/dev/null && networkd=active
+    gateway=$(ip route show default 2>/dev/null | head -1)
+    [ -n "$gateway" ] || gateway=none
+    if [ -f /etc/resolv.conf ]; then
+        nameservers=$(
+            sed -nE 's/^nameserver[[:space:]]+//p' /etc/resolv.conf 2>/dev/null |
+                jq -Rsc 'split("\n") | map(select(length > 0))'
+        )
+    fi
+    host archlinux.org &>/dev/null && resolve=true
+    ping -c 1 -W 3 8.8.8.8 &>/dev/null && ping_ip=true
+    ping -c 1 -W 3 archlinux.org &>/dev/null && ping_host=true
+    if command -v ufw &>/dev/null; then
+        if ufw status 2>/dev/null | head -1 | grep -q active; then firewall=ufw-active; else firewall=ufw-inactive; fi
+    elif command -v iptables &>/dev/null; then
+        firewall=iptables
+    fi
+    local interfaces='[]'
+    if command -v ip &>/dev/null; then
+        interfaces=$(ip -br -json addr show 2>/dev/null || echo '[]')
+    fi
+    jq -nc --arg nm "$networkmanager" --arg nd "$networkd" --arg gateway "$gateway" \
+        --argjson resolve "$resolve" --argjson ping_ip "$ping_ip" \
+        --argjson ping_host "$ping_host" --arg firewall "$firewall" \
+        --argjson nameservers "$nameservers" --argjson interfaces "$interfaces" \
+        '{networkmanager: $nm, systemd_networkd: $nd, default_route: $gateway,
+          dns_servers: $nameservers, dns_resolves: $resolve, interfaces: $interfaces,
+          connectivity: {ping_8_8_8_8: $ping_ip, ping_archlinux_org: $ping_host},
+          firewall: $firewall}'
+}
+
+net_diag() {
+    if [ "${1:-}" = "--json" ]; then
+        net_diag_json
+        return 0
+    fi
+
+    # NetworkManager status
+    header "NetworkManager"
+    if systemctl is-active NetworkManager &>/dev/null; then
+        success "NetworkManager: ACTIVE"
+        nmcli general status 2>/dev/null || true
+    else
+        warn "NetworkManager: INACTIVE"
+    fi
+
+    # systemd-networkd status
+    header "systemd-networkd"
+    if systemctl is-active systemd-networkd &>/dev/null; then
+        warn "systemd-networkd: ACTIVE (may conflict with NetworkManager)"
+    else
+        success "systemd-networkd: INACTIVE (expected when using NetworkManager)"
+    fi
+
+    # Network interfaces
+    header "Network Interfaces"
+    ip -br addr 2>/dev/null || ifconfig -a 2>/dev/null || true
+
+    # Default gateway
+    header "Default Gateway"
+    ip route show default 2>/dev/null || true
+
+    # DNS
+    header "DNS Servers"
+    if [ -f /etc/resolv.conf ]; then
+        grep -E '^nameserver' /etc/resolv.conf 2>/dev/null || warn "No nameservers in /etc/resolv.conf"
+    else
+        warn "/etc/resolv.conf not found"
+    fi
+    # Also show NetworkManager DNS
+    if command -v nmcli &>/dev/null && systemctl is-active NetworkManager &>/dev/null; then
+        echo ""
+        info "NetworkManager DNS (per connection):"
+        nmcli -f IP4.DNS con show 2>/dev/null | head -10 || true
+    fi
+
+    # DNS resolution test
+    header "DNS Resolution Test"
+    if host archlinux.org &>/dev/null; then
+        success "DNS resolution: OK (archlinux.org resolved)"
+    else
+        warn "DNS resolution: FAILED (cannot resolve archlinux.org)"
+    fi
+
+    # Ping tests
+    header "Connectivity Tests"
+    if ping -c 2 -W 3 8.8.8.8 &>/dev/null; then
+        success "Ping 8.8.8.8: OK"
+    else
+        warn "Ping 8.8.8.8: FAILED (no internet or ICMP blocked)"
+    fi
+    if ping -c 2 -W 3 archlinux.org &>/dev/null; then
+        success "Ping archlinux.org: OK"
+    else
+        warn "Ping archlinux.org: FAILED"
+    fi
+
+    # Firewall
+    header "Firewall"
+    if command -v ufw &>/dev/null; then
+        local ufw_status
+        ufw_status=$(sudo ufw status 2>/dev/null | head -1) || true
+        if echo "$ufw_status" | grep -q "active"; then
+            info "UFW: ACTIVE"
+        else
+            info "UFW: INACTIVE"
+        fi
+    elif command -v iptables &>/dev/null; then
+        local rule_count
+        rule_count=$(sudo iptables -L -n 2>/dev/null | grep -c "^Chain" || echo 0)
+        info "iptables: $rule_count chains active"
+    else
+        info "No firewall detected"
+    fi
+
+    echo ""
+}
+
+net_fix() {
+    header "Fixing Network Issues"
+    require_root
+
+    # Stop/mask systemd-networkd if NetworkManager is preferred
+    header "Checking systemd-networkd"
+    if systemctl is-active systemd-networkd &>/dev/null; then
+        info "Stopping systemd-networkd..."
+        sudo systemctl stop systemd-networkd
+        sudo systemctl disable systemd-networkd
+        sudo systemctl mask systemd-networkd
+        success "systemd-networkd stopped, disabled, and masked"
+    else
+        success "systemd-networkd already inactive"
+    fi
+
+    # Also mask systemd-resolved if using NetworkManager's DNS
+    if systemctl is-active systemd-resolved &>/dev/null; then
+        info "Stopping systemd-resolved..."
+        sudo systemctl stop systemd-resolved
+        sudo systemctl disable systemd-resolved
+        sudo systemctl mask systemd-resolved
+        success "systemd-resolved stopped and masked"
+    fi
+
+    # Restart NetworkManager
+    header "Restarting NetworkManager"
+    if systemctl is-active NetworkManager &>/dev/null; then
+        sudo systemctl restart NetworkManager
+        success "NetworkManager restarted"
+    else
+        info "NetworkManager not running, starting..."
+        sudo systemctl enable --now NetworkManager
+        success "NetworkManager enabled and started"
+    fi
+
+    # Fix DNS - ensure resolv.conf has working nameservers
+    header "Fixing DNS"
+    if ! grep -qE '^nameserver' /etc/resolv.conf 2>/dev/null; then
+        info "No nameservers found, adding defaults..."
+        echo -e "# Generated by linxira-config net fix\nnameserver 8.8.8.8\nnameserver 1.1.1.1" | sudo tee /etc/resolv.conf >/dev/null
+        success "DNS nameservers set: 8.8.8.8, 1.1.1.1"
+    else
+        success "DNS nameservers already configured"
+    fi
+
+    echo ""
+    success "Network fix complete. Run 'linxira-config net diag' to verify."
+}
+
+net_dns() {
+    local action=${1:-show}
+    local dns_ip=${2:-}
+
+    case $action in
+        show|status)
+            header "Current DNS Configuration"
+            if [ -f /etc/resolv.conf ]; then
+                grep -E '^nameserver' /etc/resolv.conf 2>/dev/null | while read -r line; do
+                    info "$line"
+                done
+            else
+                warn "/etc/resolv.conf not found"
+            fi
+            if command -v nmcli &>/dev/null && systemctl is-active NetworkManager &>/dev/null; then
+                echo ""
+                info "NetworkManager DNS per connection:"
+                nmcli -f NAME,IP4.DNS con show 2>/dev/null | grep -v "^NAME" | grep -v "^--" | head -10 || true
+            fi
+            echo ""
+            ;;
+        set|add)
+            [ -z "$dns_ip" ] && error "Please specify a DNS server IP: linxira-config net dns set <ip>"
+            validate_dns_server "$dns_ip"
+            require_root
+            # Remove existing nameservers and add the new one + fallback
+            if [ -f /etc/resolv.conf ]; then
+                sudo sed -i '/^nameserver/d' /etc/resolv.conf
+            fi
+            echo "nameserver $dns_ip" | sudo tee -a /etc/resolv.conf >/dev/null
+            # Add fallback if different
+            if [ "$dns_ip" != "8.8.8.8" ]; then
+                echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf >/dev/null
+            fi
+            if [ "$dns_ip" != "1.1.1.1" ]; then
+                echo "nameserver 1.1.1.1" | sudo tee -a /etc/resolv.conf >/dev/null
+            fi
+            success "DNS set to $dns_ip (with fallbacks)"
+            # Verify
+            if host archlinux.org &>/dev/null; then
+                success "DNS resolution test: PASSED"
+            else
+                warn "DNS resolution test: FAILED - check if $dns_ip is reachable"
+            fi
+            ;;
+        *)
+            error "Unknown DNS action: $action (use show/set)"
+            ;;
+    esac
+}
+
+# ─── System Info ─────────────────────────────────────────────
+
+show_info() {
+    header "System Information"
+    echo "  OS:       $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)"
+    echo "  Kernel:   $(uname -r)"
+    echo "  Arch:     $(uname -m)"
+    echo "  CPU:      $(lscpu | grep "Model name" | cut -d: -f2 | xargs)"
+    echo "  Memory:   $(free -h | awk '/^Mem:/{print $2}')"
+    echo "  Hostname: $(hostname)"
+    echo ""
+    header "GPU"
+    lspci | grep -E "VGA|3D" | awk -F': ' '{print "  " $2}' || echo "  No GPU detected"
+    echo ""
+    header "Installed Kernels"
+    pacman -Q 2>/dev/null | awk '
+        $1 ~ /^linux(-lts|-zen|-hardened)?$/ { print "  " $1, $2; found=1 }
+        END { if (!found) print "  (none detected)" }
+    '
+}
+
+runtime_status() {
+    local tool
+    header "Runtime And Package Managers"
+    for tool in pacman paru nix python uv node npm rustc cargo go apptainer podman; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            printf '  %-12s installed (%s)\n' "$tool" "$(command -v "$tool")"
+        else
+            printf '  %-12s unavailable\n' "$tool"
+        fi
+    done
+    if root=$(miniforge_root); then
+        printf '  %-12s installed (%s)\n' miniforge "$root"
+    else
+        printf '  %-12s unavailable\n' miniforge
+    fi
+    printf '  %-12s unresolved (no verified package or implementation)\n' wise
+}
+
+# ─── Quick Status ────────────────────────────────────────────
+
+quick_status() {
+    header "Linxira System Status"
+    printf '  %-20s %s\n' "OS:" "$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'"' -f2 || echo "unknown")"
+    printf '  %-20s %s\n' "Kernel:" "$(uname -r 2>/dev/null || echo unknown)"
+    printf '  %-20s %s\n' "Desktop:" "$(printenv XDG_CURRENT_DESKTOP 2>/dev/null || echo unknown)"
+
+    header "Sources"
+    printf '  %-20s %s\n' "Arch:" "$(mirror_current arch)"
+    printf '  %-20s %s\n' "npm:" "$(mirror_current npm)"
+    printf '  %-20s %s\n' "PyPI:" "$(mirror_current pip)"
+    printf '  %-20s %s\n' "AUR:" "$(mirror_current aur)"
+    printf '  %-20s %s\n' "Go:" "$(mirror_current go)"
+    printf '  %-20s %s\n' "Flatpak:" "$(mirror_current flatpak)"
+
+    header "Runtimes"
+    for tool in python node npm rustc cargo go podman; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            printf '  %-20s installed\n' "$tool"
+        else
+            printf '  %-20s unavailable\n' "$tool"
+        fi
+    done
+
+    header "Maintenance"
+    printf '  %-20s %s\n' "Network:" "$(if systemctl is-active --quiet NetworkManager 2>/dev/null; then echo active; else echo inactive; fi)"
+    printf '  %-20s %s\n' "SSH server:" "$(if systemctl is-active --quiet sshd 2>/dev/null; then echo active; else echo inactive; fi)"
+    printf '  %-20s %s\n' "Updates:" "$(if systemctl is-active --quiet linxira-update.timer 2>/dev/null; then echo enabled; else echo disabled; fi)"
+    echo ""
+    echo "  Run 'linxira-config help' for all commands."
+}
+
+# ─── Logs: 诊断日志收集与快速分享 ────────────────────────────
+
+LOGS_DIR="${HOME}/linxira-logs"
+
+logs_collect() {
+    mkdir -p "$LOGS_DIR"
+    local out="$LOGS_DIR/linxira-logs-$(date +%Y%m%d-%H%M%S).txt"
+    {
+        echo "=== Linxira OS diagnostic bundle ==="
+        echo "=== date: $(date -Is) | kernel: $(uname -r) ==="
+        echo
+        echo "─── system ───"
+        grep -E "^(NAME|PRETTY_NAME)=" /etc/os-release 2>/dev/null
+        lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT 2>/dev/null
+        df -h / 2>/dev/null
+        echo
+        echo "─── pacman repositories ───"
+        grep -E "^\[|Server" /etc/pacman.conf 2>/dev/null
+        echo
+        echo "─── installed linxira packages ───"
+        pacman -Q 2>/dev/null | grep -i linxira
+        echo
+        echo "─── failed units ───"
+        systemctl --failed --no-pager 2>/dev/null
+        echo
+        echo "─── calamares installer log (tail) ───"
+        local f
+        for f in /tmp/linxira-installer.log /root/.cache/calamares/*.log /home/*/.cache/calamares/*.log /var/log/installation.log; do
+            if [ -f "$f" ]; then
+                echo "--- $f (last 400 lines) ---"
+                tail -n 400 "$f" 2>/dev/null
+            fi
+        done
+        echo
+        echo "─── pacman.log (tail) ───"
+        tail -n 300 /var/log/pacman.log 2>/dev/null
+        echo
+        echo "─── journal errors (this boot, tail) ───"
+        journalctl -b -p err --no-pager 2>/dev/null | tail -n 200
+    } > "$out"
+    printf '%s\n' "已收集诊断日志: $out"
+    printf '%s\n' "查看内容:   less $out"
+    printf '%s\n' "上传分享:   linxira-config logs upload $out"
+}
+
+logs_upload() {
+    local file=${1:-}
+    if [ -z "$file" ]; then
+        file=$(ls -1t "$LOGS_DIR"/linxira-logs-*.txt 2>/dev/null | head -1)
+    fi
+    if [ -z "$file" ] || [ ! -f "$file" ]; then
+        error "没有可上传的日志文件(先运行: linxira-config logs collect)"
+        return 1
+    fi
+    [ "$(id -u)" -eq 0 ] && chmod a+r -- "$file" 2>/dev/null
+    local url
+    printf '%s\n' "上传中(0x0.st, 保留约30天)..."
+    url=$(curl -fsS --max-time 90 -A "linxira-config/${VERSION}" -F "file=@${file}" https://0x0.st 2>/dev/null)
+    if [ -n "$url" ]; then
+        printf '%s\n' "日志已上传, 把下面的链接发给我们即可:"
+        printf '  %s\n' "$url"
+        return 0
+    fi
+    printf '%s\n' "0x0.st 不可达, 尝试 dpaste 备用通道..."
+    # 2026-09-30: 0x0.st 在国内不可达是实测常态; dpaste API 纯 curl、无额外依赖。
+    url=$(curl -fsS --max-time 60 --data-urlencode "content@${file}" -d expiry_days=7 https://dpaste.com/api/v2/text 2>/dev/null)
+    if [ -n "$url" ]; then
+        case "$url" in http*) : ;; *) url="https://dpaste.com${url}" ;; esac
+        printf '%s\n' "日志已上传(dpaste, 保留7天), 把下面的链接发给我们即可:"
+        printf '  %s\n' "$url"
+        return 0
+    fi
+    printf '%s\n' "dpaste 不可达, 尝试 termbin 备用通道..."
+    if command -v nc >/dev/null 2>&1; then
+        url=$(nc termbin.com 9999 < "$file" 2>/dev/null | tr -d '\r\n')
+    else
+        # 镜像内无 nc: bash 内建 /dev/tcp 直连 termbin 协议(纯内建, 零依赖)
+        url=$(exec 3<>"/dev/tcp/termbin.com/9999" && cat "$file" >&3 && head -c 64 <&3 | tr -d '\r\n')
+        exec 3>&- 2>/dev/null
+    fi
+    if [ -n "$url" ]; then
+        printf '%s\n' "日志已上传(termbin), 把下面的链接发给我们即可:"
+        printf '  %s\n' "$url"
+        return 0
+    fi
+    error "上传失败: 检查网络后重试, 或直接把日志文件内容复制发给我们 ($file)"
+    return 1
+}
+
+# 2026-09-22: 终端回退链 —— cosmic-term(Arch 包名 cosmic-terminal) -> konsole -> xterm。
+# Config CLI 是交互式菜单, 终端随进程存活, 不需要 hold。
+launch_config_terminal() {
+	local terminal
+	for terminal in /usr/bin/cosmic-term /usr/bin/konsole /usr/bin/xterm; do
+		[ -x "${terminal}" ] || continue
+		case "${terminal}" in
+			*cosmic-term)
+				setsid "${terminal}" -e linxira-config > /dev/null 2>&1 &
+			;;
+			*konsole)
+				setsid "${terminal}" --hold -e linxira-config > /dev/null 2>&1 &
+			;;
+			*)
+				setsid "${terminal}" -hold -e linxira-config > /dev/null 2>&1 &
+			;;
+		esac
+		return 0
+	done
+	error "没有找到可用终端 (cosmic-term / konsole / xterm)"
+	return 1
+}
+
+# 2026-09-22: ssh on —— 一条命令开通远程访问: 装 openssh、开机自启、
+# 显式放行密码连接、防火墙放行, 并打印连接地址。交互式 sudo 只问一次密码。
+ssh_on() {
+    require_root
+    if ! command -v sshd &> /dev/null; then
+        info "Installing openssh..."
+        sudo pacman -S --needed --noconfirm openssh
+    fi
+    sudo install -Dm644 /dev/null /etc/ssh/sshd_config.d/10-linxira.conf
+    printf 'PasswordAuthentication yes\n' | sudo tee /etc/ssh/sshd_config.d/10-linxira.conf > /dev/null
+    sudo systemctl enable --now sshd
+    if systemctl is-active --quiet ufw 2> /dev/null; then
+        sudo ufw allow ssh > /dev/null 2>&1 || true
+    fi
+    local ip user
+    user="${SUDO_USER:-$(whoami)}"
+    ip=$(hostname -I 2> /dev/null | awk '{print $1}')
+    success "SSH remote access enabled"
+    echo "  ${BOLD}Connect:${NC} ssh ${user}@${ip:-<this-machine-ip>}"
+}
+
+ssh_off() {
+    require_root
+    sudo systemctl disable --now sshd
+    success "SSH remote access disabled"
+}
+
+# ─── Main Dispatch ───────────────────────────────────────────
+
+case "${1:-help}" in
+    --launch)
+        # 2026-09-22: 桌面入口调用 —— 在可用终端中承载交互式配置菜单。
+        # COSMIC 的终端包名是 cosmic-terminal, 二进制是 cosmic-term。
+        launch_config_terminal
+        ;;
+    mirror)
+        case "${2:-arch}" in
+            list) mirror_list arch "${4:-}" ;;
+            speed) mirror_speed arch "${3:-}" ;;
+            auto) mirror_auto arch ;;
+            set) mirror_set arch "${3:-}" ;;
+            reset) mirror_reset arch ;;
+            arch|npm|pip|aur|flatpak|go)
+                case "${3:-list}" in
+                    list) mirror_list "$2" "${4:-}" ;;
+                    speed) mirror_speed "$2" "${4:-}" ;;
+                    auto) mirror_auto "$2" ;;
+                    set) mirror_set "$2" "${4:-}" ;;
+                    reset) mirror_reset "$2" ;;
+                    *) error "Unknown mirror action: ${3:-} (use list/speed/auto/set/reset)" ;;
+                esac
+                ;;
+            *) error "Unknown mirror type: ${2:-} (use arch/npm/pip/aur/flatpak/go)" ;;
+        esac
+        ;;
+    logs)
+        case "${2:-collect}" in
+            collect) logs_collect ;;
+            upload) logs_upload "${3:-}" ;;
+            *) logs_collect ;;
+        esac
+        ;;
+    source)
+        source_list
+        ;;
+    workflow|install)
+        error "Software installation is owned by Shelly and Quick System Software Setup"
+        ;;
+    service)
+        backend_pending
+        ;;
+    security)
+        case "${2:-status}" in
+            status) security_status ;;
+            harden) backend_pending ;;
+            ufw) ufw_manage "${3:-status}" "${4:-}" ;;
+            *) error "Unknown security action: ${2:-} (use status/harden/ufw)" ;;
+        esac
+        ;;
+    ssh)
+        case "${2:-status}" in
+            # 2026-09-22: ssh on/off 落地(用户决策: 远程接入必须一条命令可用);
+            # 事务后端门控继续覆盖 security harden 等其他 mutation。
+            on|enable) ssh_on ;;
+            off|disable) ssh_off ;;
+            start) require_root; sudo systemctl start sshd; success "sshd started" ;;
+            stop) require_root; sudo systemctl stop sshd; success "sshd stopped" ;;
+            status|port|key|authorized) ssh_manage "${@:2}" ;;
+            *) error "Unknown SSH action: ${2:-}" ;;
+        esac
+        ;;
+    rdp)
+        backend_pending
+        ;;
+    virt)
+        if [[ ${2:-status} == status ]]; then
+            virt_manage status
+        else
+            backend_pending
+        fi
+        ;;
+    power)
+        if [[ ${2:-status} == status ]]; then
+            power_manage status
+        else
+            backend_pending
+        fi
+        ;;
+    catalog)
+        catalog_manage "${2:-}" "${3:-list}" "${4:-}" "${5:-}"
+        ;;
+    gpu)
+        gpu_action "${2:-info}"
+        ;;
+    net)
+        case "${2:-help}" in
+            diag) net_diag "${3:-}" ;;
+            fix) backend_pending ;;
+            dns) net_dns "${3:-show}" "${4:-}" ;;
+            *) error "Unknown net action: ${2:-} (use diag/fix/dns)" ;;
+        esac
+        ;;
+    info)
+        show_info
+        ;;
+    status|quick-status)
+        quick_status
+        ;;
+    runtime)
+        case "${2:-status}" in
+            status) runtime_status ;;
+            *) error "Unknown runtime action: ${2:-} (use status)" ;;
+        esac
+        ;;
+    conda)
+        conda_manage "${2:-channels}" "${3:-list}" "${4:-}"
+        ;;
+    timeshift)
+        timeshift_manage "${2:-help}"
+        ;;
+    workspace-guard)
+        workspace_guard_manage "${2:-status}" "${3:-}"
+        ;;
+    stack)
+        shift
+        stack_manage "$@"
+        ;;
+    env)
+        shift
+        env_manage "$@"
+        ;;
+    tui)
+        config_tui
+        ;;
+    headless)
+        headless_manage "${2:-status}" "${3:-}"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    version|--version|-v)
+        echo "linxira-config v${VERSION}"
+        ;;
+    *)
+        error "Unknown command: $1"
+        show_help
+        ;;
+esac
