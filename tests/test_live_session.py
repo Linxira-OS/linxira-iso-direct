@@ -190,7 +190,12 @@ class LiveSessionTests(unittest.TestCase):
     def test_installer_failure_is_visible_and_logged(self):
         script = INSTALLER_SHELL.read_text(encoding="utf-8")
         self.assertIn("/tmp/linxira-installer.log", script)
-        self.assertIn("konsole --fullscreen --hold", script)
+        # 2026-09-30: 失败不再 konsole --fullscreen 抢焦点 —— 桌面通知 +
+        # 自动收集/上传诊断报告, 短链放进通知(paste.rs/termbin/dpaste)
+        self.assertNotIn("konsole --fullscreen", script)
+        self.assertIn("notify-send", script)
+        self.assertIn("logs collect", script)
+        self.assertIn("logs upload", script)
         # 2026-09-28: pkexec 内先清理失败现场再 exec calamares
         self.assertIn("sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares", script)
         self.assertIn("lock=/tmp/linxira-installer.lock", script)
@@ -198,6 +203,10 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("status == 87", script)
         self.assertNotIn("is-active polkit.service", script)
         self.assertIn("if (( status != 0 ))", script)
+        # 2026-09-30: pkexec 剥离会话环境 -> Qt wayland abort(134);
+        # 必须显式注入 installer 会话凭据
+        self.assertIn("XDG_RUNTIME_DIR=/run/user/$(id -u installer)", script)
+        self.assertIn("QT_QPA_PLATFORM=wayland", script)
 
     def test_installer_metadata_owns_its_maintenance_links(self):
         root = ET.parse(INSTALLER_METAINFO).getroot()
