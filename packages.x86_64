@@ -79,6 +79,7 @@ linxira-config-hub
 linxira-gaming-manager
 linxira-hardware-driver-manager
 linxira-recovery-diagnostics
+linxira-crash-watch
 linxira-package-center
 linxira-update
 linxira-welcome
@@ -147,6 +148,7 @@ spectacle
 squashfs-tools
 sudo
 syslinux
+systemd-coredump
 systemd-resolvconf
 tcpdump
 terminus-font
