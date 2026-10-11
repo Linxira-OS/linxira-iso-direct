@@ -270,6 +270,7 @@ class LiveSessionTests(unittest.TestCase):
             "completion_agent_package": "linxira-completion-agent",
             "components_package": "linxira-components",
             "config_hub_package": "linxira-config-hub",
+            "crash_watch_package": "linxira-crash-watch",
             "gaming_manager_package": "linxira-gaming-manager",
             "hwd_detector_package": "linxira-hwd-detector",
             "hardware_driver_manager_package": "linxira-hardware-driver-manager",

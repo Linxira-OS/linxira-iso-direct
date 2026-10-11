@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --crash-watch-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -19,6 +19,7 @@ gaming_manager_package=''
 hwd_detector_package=''
 hardware_driver_manager_package=''
 recovery_diagnostics_package=''
+crash_watch_package=''
 update_package=''
 welcome_package=''
 keyring_package=''
@@ -81,6 +82,11 @@ while [[ $# -gt 0 ]]; do
     --recovery-diagnostics-package)
       [[ $# -ge 2 ]] || usage
       recovery_diagnostics_package=$2
+      shift 2
+      ;;
+    --crash-watch-package)
+      [[ $# -ge 2 ]] || usage
+      crash_watch_package=$2
       shift 2
       ;;
     --hwd-detector-package)
@@ -147,6 +153,7 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
        -z "$hwd_detector_package" || ! -f "$hwd_detector_package" ||
        -z "$hardware_driver_manager_package" || ! -f "$hardware_driver_manager_package" ||
        -z "$recovery_diagnostics_package" || ! -f "$recovery_diagnostics_package" ||
+      -z "$crash_watch_package" || ! -f "$crash_watch_package" ||
       -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
       -z "$keyring_package" || ! -f "$keyring_package" ||
@@ -212,6 +219,7 @@ gaming_manager_package=$(realpath "$gaming_manager_package")
 hwd_detector_package=$(realpath "$hwd_detector_package")
 hardware_driver_manager_package=$(realpath "$hardware_driver_manager_package")
 recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
+crash_watch_package=$(realpath "$crash_watch_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
 keyring_package=$(realpath "$keyring_package")
@@ -296,6 +304,17 @@ validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagn
   usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \
   usr/share/metainfo/org.linxira.RecoveryDiagnostics.metainfo.xml \
   usr/share/licenses/linxira-recovery-diagnostics/LICENSE
+validate_package_artifact "$crash_watch_package" linxira-crash-watch \
+  usr/bin/linxira-crash \
+  usr/lib/systemd/user/linxira-crash-watch.service \
+  usr/lib/systemd/user-preset/90-linxira-crash-watch.preset \
+  usr/share/applications/org.linxira.CrashWatch.desktop \
+  usr/share/metainfo/org.linxira.CrashWatch.metainfo.xml \
+  usr/share/licenses/linxira-crash-watch/LICENSE
+if ! bsdtar -tf "$crash_watch_package" | grep -q 'linxira_crash_watch/skills/diagnose-crash/SKILL.md'; then
+  printf 'The crash-watch artifact does not contain the diagnose-crash skill.\n' >&2
+  exit 1
+fi
 validate_package_artifact "$update_package" linxira-update \
   usr/bin/linxira-update \
   etc/xdg/autostart/linxira-update-tray.desktop \
@@ -376,6 +395,7 @@ package_artifacts=(
   "$hwd_detector_package"
   "$hardware_driver_manager_package"
   "$recovery_diagnostics_package"
+  "$crash_watch_package"
   "$update_package"
   "$welcome_package"
   "$keyring_package"

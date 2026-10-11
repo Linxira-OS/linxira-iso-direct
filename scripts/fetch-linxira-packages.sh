@@ -35,6 +35,7 @@ default_packages=(
   linxira-hwd-detector
   linxira-hardware-driver-manager
   linxira-recovery-diagnostics
+  linxira-crash-watch
   linxira-update
   linxira-welcome
   linxira-wiki

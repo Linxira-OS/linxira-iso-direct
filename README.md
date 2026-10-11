@@ -29,6 +29,7 @@ official [linxira] repository first — see below):
   --hwd-detector-package ./.linxira-packages/linxira-hwd-detector-*.pkg.tar.zst \
   --hardware-driver-manager-package ./.linxira-packages/linxira-hardware-driver-manager-*.pkg.tar.zst \
   --recovery-diagnostics-package ./.linxira-packages/linxira-recovery-diagnostics-*.pkg.tar.zst \
+  --crash-watch-package ./.linxira-packages/linxira-crash-watch-*.pkg.tar.zst \
   --update-package ./.linxira-packages/linxira-update-*.pkg.tar.zst \
   --config-hub-package ./.linxira-packages/linxira-config-hub-*.pkg.tar.zst \
   --package-center-package ./.linxira-packages/linxira-package-center-*.pkg.tar.zst \
@@ -39,7 +40,7 @@ official [linxira] repository first — see below):
 ```
 
 `scripts/fetch-linxira-packages.sh` downloads the full self-built package closure
-(16 packages) from the official `https://linxira-os.github.io/linxira-packages/x86_64`
+(18 packages) from the official `https://linxira-os.github.io/linxira-packages/x86_64`
 repository, so the official build is reproducible from released artifacts. Local
 `.pkg.tar.zst` paths remain supported for third-party packages that were cached
 locally; Linxira self-built packages should normally come from the official repo.

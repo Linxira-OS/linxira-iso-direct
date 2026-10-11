@@ -148,7 +148,6 @@ spectacle
 squashfs-tools
 sudo
 syslinux
-systemd-coredump
 systemd-resolvconf
 tcpdump
 terminus-font

@@ -46,7 +46,6 @@ python
 pyside6
 shelly
 sudo
-systemd-coredump
 wireplumber
 wireguard-tools
 xdg-desktop-portal
