@@ -1,5 +1,8 @@
 #!/bin/bash
 #
+# Based on archiso (https://gitlab.archlinux.org/archlinux/archiso),
+# Copyright (C) Arch Linux contributors.
+# Modified by Linxira OS contributors (2026-10-24).
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 get_cmdline() {
