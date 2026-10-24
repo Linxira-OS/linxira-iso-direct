@@ -449,6 +449,14 @@ target_packages+=("${candidate_packages[@]}")
 target_packages+=(amd-ucode intel-ucode)
 # Resolve Arch virtual providers without making the ISO build interactive.
 target_packages+=(pipewire-jack qt6-multimedia-ffmpeg mkinitcpio tesseract-data-eng)
+
+# 2026-10-25 决定: linxira-bio-sdk* 与 linxira-zeta* 不进系统(它们也可能不在离线仓库)。
+# 目标清单/桌面包清单里一旦出现, 构建直接失败, 避免悄悄装进镜像。
+forbidden=$(printf '%s\n' "${target_packages[@]}" | grep -E '^linxira-(bio-sdk|zeta)(-|$)' || true)
+if [[ -n "$forbidden" ]]; then
+  printf '错误: 目标包清单含禁止安装项:\n%s\n' "$forbidden" >&2
+  exit 66
+fi
 offline_repo="${profile_copy}/airootfs/opt/linxira/offline-repo/x86_64"
 package_cache="${build_parent}/.linxira-package-cache"
 mkdir -p "$package_cache"

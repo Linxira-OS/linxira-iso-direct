@@ -20,6 +20,7 @@ linux-lts
 linux-lts-headers
 linxira-artwork
 linxira-catalog
+linxira-hooks
 linxira-hwd-detector
 linxira-component-manager
 linxira-completion-agent
@@ -132,3 +133,4 @@ xdg-utils
 xl2tpd
 micro
 vim
+linxira-kernel-manager
