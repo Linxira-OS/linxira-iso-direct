@@ -392,7 +392,7 @@ cp -a "${profile_dir}/." "$profile_copy/"
 notices_src="${profile_dir}/../packages/scripts/generate-notices.py"
 [[ -r "$notices_src" ]] || { echo "错误: 缺少 $notices_src" >&2; exit 1; }
 install -Dm755 "$notices_src" "$profile_copy/airootfs/usr/local/bin/linxira-generate-notices.py"
-iso_version_value=$(cd "$profile_dir" && eval "$(grep '^iso_version=' profiledef.sh)")
+iso_version_value=$(cd "$profile_dir" && bash -c 'source ./profiledef.sh; printf %s "$iso_version"')
 printf '%s\n' "$iso_version_value" > "$profile_copy/airootfs/etc/linxira-release"
 install -Dm644 "$grub_font" "${profile_copy}/grub/fonts/unicode.pf2"
 if [[ -e "${profile_copy}/airootfs/etc/systemd/system/multi-user.target.wants/sshd.service" ]] ||
