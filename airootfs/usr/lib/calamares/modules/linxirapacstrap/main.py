@@ -760,21 +760,36 @@ def _enable_target_multilib(root):
         raise ValueError("target pacman configuration has no recognized multilib section")
 
 
-def _enable_target_linxira_repo(root):
-    """Append the signed [linxira] repository so installed Linxira packages
-    remain tracked by linxira-update after first boot. Idempotent."""
-    config_path = Path(root) / "etc/pacman.conf"
-    contents = config_path.read_text(encoding="utf-8")
-    if re.search(r"(?m)^\[linxira\]\s*$", contents):
-        return
-    section = (
+_TARGET_REPOS = (
+    # 主仓: 自研系统包
+    (
         "[linxira]\n"
         "SigLevel = Required DatabaseOptional\n"
         "Server = https://linxira-os.github.io/linxira-packages/$arch"
-    )
-    if not contents.endswith("\n"):
-        contents += "\n"
-    config_path.write_text(contents + "\n" + section + "\n", encoding="utf-8")
+    ),
+    # 附加仓: Zeta 套件(体量超主仓单文件上限, 走 Release 资产托管的独立索引)。
+    # 段名必须与仓库索引文件名一致(linxira-zeta.db), 否则 pacman 找不到库。
+    (
+        "[linxira-zeta]\n"
+        "SigLevel = Required DatabaseOptional\n"
+        "Server = https://github.com/Linxira-OS/packages/releases/download/zeta-repo"
+    ),
+)
+
+
+def _enable_target_linxira_repo(root):
+    """Append the signed Linxira repositories so installed Linxira packages
+    remain tracked by linxira-update after first boot. Idempotent, per repo."""
+    config_path = Path(root) / "etc/pacman.conf"
+    contents = config_path.read_text(encoding="utf-8")
+    for section in _TARGET_REPOS:
+        name = section.split("\n", 1)[0]
+        if re.search(rf"(?m)^{re.escape(name)}\s*$", contents):
+            continue
+        if not contents.endswith("\n"):
+            contents += "\n"
+        contents = contents + "\n" + section + "\n"
+    config_path.write_text(contents, encoding="utf-8")
 
 
 def _pacstrap_command(pacman_config, root, packages):

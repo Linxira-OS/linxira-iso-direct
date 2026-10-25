@@ -14,10 +14,7 @@ WELCOME = WELCOME_SOURCE / "src/linxira-welcome"
 WELCOME_AUTOSTART = PROFILE_ROOT / "airootfs/etc/xdg/autostart/org.linxira.Welcome.desktop"
 WELCOME_I18N = WELCOME_SOURCE / "data/i18n"
 CANONICAL_LOGO = PROFILE_ROOT.parent / "linxira-artwork/assets/logo/linxira-l.svg"
-SCALE_LOGO = (
-    PROFILE_ROOT.parent
-    / "linxira-artwork/assets/concepts/reference-frame/l-scale.svg"
-)
+SHIPPED_LOGO = PROFILE_ROOT / "airootfs/etc/calamares/branding/linxira/linxira-logo.svg"
 BOOT_CONFIGS = (
     PROFILE_ROOT / "grub/grub.cfg",
     PROFILE_ROOT / "grub/loopback.cfg",
@@ -130,15 +127,18 @@ class LiveSessionTests(unittest.TestCase):
         self.assertNotIn('"miniforge":', script)
         self.assertNotIn('self.catalog.get("applications", [])', script)
 
-    def test_scale_l_is_the_canonical_logo(self):
-        canonical = CANONICAL_LOGO.read_text(encoding="utf-8")
-        scale = SCALE_LOGO.read_text(encoding="utf-8")
-        for geometry in (
-            'fill="#20B8B0" d="M112 64H224V336H448V448H112Z"',
-            'stroke="#F36F5D"',
+    def test_canonical_logo_is_the_shipped_mark(self):
+        """品牌标志 = 艺术仓的 Origin Frame(原点框), 且随 ISO 发出的副本一致。"""
+        canonical = CANONICAL_LOGO.read_text(encoding="utf-8").replace("\r\n", "\n")
+        shipped = SHIPPED_LOGO.read_text(encoding="utf-8").replace("\r\n", "\n")
+        self.assertEqual(canonical, shipped)
+        for marker in (
+            'aria-label="Linxira Origin Frame mark"',
+            'stroke="#20B8B0" stroke-width="76"',
+            'stroke="#0E1417" stroke-width="36"',
+            'fill="#F36F5D"',
         ):
-            self.assertIn(geometry, canonical)
-            self.assertIn(geometry, scale)
+            self.assertIn(marker, canonical)
 
     def test_default_desktop_uses_dark_kde_settings(self):
         kdeglobals = (PROFILE_ROOT / "airootfs/etc/skel/.config/kdeglobals").read_text(encoding="utf-8")

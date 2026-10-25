@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --crash-watch-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --crash-watch-package PATH --zeta-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -20,6 +20,7 @@ hwd_detector_package=''
 hardware_driver_manager_package=''
 recovery_diagnostics_package=''
 crash_watch_package=''
+zeta_package=''
 update_package=''
 welcome_package=''
 keyring_package=''
@@ -87,6 +88,11 @@ while [[ $# -gt 0 ]]; do
     --crash-watch-package)
       [[ $# -ge 2 ]] || usage
       crash_watch_package=$2
+      shift 2
+      ;;
+    --zeta-package)
+      [[ $# -ge 2 ]] || usage
+      zeta_package=$2
       shift 2
       ;;
     --hwd-detector-package)
@@ -220,6 +226,7 @@ hwd_detector_package=$(realpath "$hwd_detector_package")
 hardware_driver_manager_package=$(realpath "$hardware_driver_manager_package")
 recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 crash_watch_package=$(realpath "$crash_watch_package")
+zeta_package=$(realpath "$zeta_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
 keyring_package=$(realpath "$keyring_package")
@@ -403,6 +410,7 @@ package_artifacts=(
   "$hardware_driver_manager_package"
   "$recovery_diagnostics_package"
   "$crash_watch_package"
+  "$zeta_package"
   "$update_package"
   "$welcome_package"
   "$keyring_package"
