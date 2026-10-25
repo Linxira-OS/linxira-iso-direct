@@ -268,7 +268,7 @@ validate_package_artifact "$wiki_package" linxira-wiki \
   usr/share/linxira/wiki/ai/manifest.json \
   usr/share/linxira/wiki/docs/index.md \
   usr/share/licenses/linxira-wiki/LICENSE
-validate_package_version "$components_package" 0.8.2-1
+validate_package_version "$components_package" 0.8.3-4
 validate_package_artifact "$component_manager_package" linxira-component-manager \
   usr/bin/linxira-component-manager \
   usr/share/applications/org.linxira.ComponentManager.desktop \
@@ -299,13 +299,13 @@ validate_package_artifact "$hwd_detector_package" linxira-hwd-detector \
   usr/bin/linxira-hwd-detector \
   usr/share/doc/linxira-hwd-detector/UPSTREAM.md \
   usr/share/licenses/linxira-hwd-detector/LICENSE
-validate_package_version "$hwd_detector_package" 1.23.0-2
+validate_package_version "$hwd_detector_package" 1.23.0-3
 validate_package_artifact "$hardware_driver_manager_package" linxira-hardware-driver-manager \
   usr/bin/linxira-hardware-driver-manager \
   usr/share/applications/org.linxira.HardwareDriverManager.desktop \
   usr/share/metainfo/org.linxira.HardwareDriverManager.metainfo.xml \
   usr/share/licenses/linxira-hardware-driver-manager/LICENSE
-validate_package_version "$hardware_driver_manager_package" 0.4.0-3
+validate_package_version "$hardware_driver_manager_package" 0.4.1-1
 validate_package_artifact "$recovery_diagnostics_package" linxira-recovery-diagnostics \
   usr/bin/linxira-recovery-diagnostics \
   usr/share/applications/org.linxira.RecoveryDiagnostics.desktop \
