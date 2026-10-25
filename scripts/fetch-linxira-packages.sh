@@ -38,6 +38,8 @@ default_packages=(
   linxira-hardware-driver-manager
   linxira-recovery-diagnostics
   linxira-crash-watch
+  linxira-hooks
+  linxira-kernel-manager
   linxira-update
   linxira-welcome
   linxira-wiki

@@ -261,6 +261,16 @@ class LiveSessionTests(unittest.TestCase):
         self.assertNotIn("calamares", target_packages)
         self.assertNotIn("archiso", target_packages)
 
+    def test_zeta_ships_by_default_while_bio_sdk_stays_forbidden(self):
+        # 2026-10-25: Zeta 是系统默认组件(桌面版预装、随 update 升级);
+        # bio-sdk 不进系统, 构建期必须硬拒绝。
+        target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
+        self.assertIn("linxira-zeta", target_packages)
+        self.assertNotIn("linxira-bio-sdk", target_packages)
+        build = BUILD_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("grep -E '^linxira-bio-sdk(-|$)'", build)
+        self.assertNotIn("grep -E '^linxira-(bio-sdk|zeta)", build)
+
     def test_system_software_is_package_owned_in_live_and_target(self):
         live_packages = set(LIVE_PACKAGES.read_text(encoding="utf-8").splitlines())
         target_packages = set(TARGET_PACKAGES.read_text(encoding="utf-8").splitlines())
@@ -275,12 +285,17 @@ class LiveSessionTests(unittest.TestCase):
             "hwd_detector_package": "linxira-hwd-detector",
             "hardware_driver_manager_package": "linxira-hardware-driver-manager",
             "recovery_diagnostics_package": "linxira-recovery-diagnostics",
+            "hooks_package": "linxira-hooks",
+            "kernel_manager_package": "linxira-kernel-manager",
             "package_center_package": "linxira-package-center",
             "update_package": "linxira-update",
             "welcome_package": "linxira-welcome",
         }
         system_packages = set(artifact_contracts.values())
-        self.assertTrue((system_packages - {"linxira-completion-agent"}).issubset(live_packages))
+        self.assertTrue(
+            (system_packages - {"linxira-completion-agent", "linxira-hooks", "linxira-kernel-manager"})
+            .issubset(live_packages)
+        )
         self.assertTrue(system_packages.issubset(target_packages))
         build = BUILD_SCRIPT.read_text(encoding="utf-8")
         self.assertNotIn('profile_dir}/../linxira-', build)

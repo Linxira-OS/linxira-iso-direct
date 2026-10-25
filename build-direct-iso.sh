@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --crash-watch-package PATH --zeta-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
+  printf 'Usage: %s --shelly-package PATH --calamares-package PATH --artwork-package PATH --catalog-package PATH --components-package PATH --component-manager-package PATH --completion-agent-package PATH --config-hub-package PATH --package-center-package PATH --gaming-manager-package PATH --hwd-detector-package PATH --hardware-driver-manager-package PATH --recovery-diagnostics-package PATH --crash-watch-package PATH --zeta-package PATH --hooks-package PATH --kernel-manager-package PATH --update-package PATH --welcome-package PATH --keyring-package PATH --wiki-package PATH --plymouth-theme-directory PATH [--output DIRECTORY]\n' "${0##*/}" >&2
 }
 
 profile_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -21,6 +21,8 @@ hardware_driver_manager_package=''
 recovery_diagnostics_package=''
 crash_watch_package=''
 zeta_package=''
+hooks_package=''
+kernel_manager_package=''
 update_package=''
 welcome_package=''
 keyring_package=''
@@ -95,6 +97,16 @@ while [[ $# -gt 0 ]]; do
       zeta_package=$2
       shift 2
       ;;
+    --hooks-package)
+      [[ $# -ge 2 ]] || usage
+      hooks_package=$2
+      shift 2
+      ;;
+    --kernel-manager-package)
+      [[ $# -ge 2 ]] || usage
+      kernel_manager_package=$2
+      shift 2
+      ;;
     --hwd-detector-package)
       [[ $# -ge 2 ]] || usage
       hwd_detector_package=$2
@@ -160,6 +172,8 @@ if [[ -z "$shelly_package" || ! -f "$shelly_package" ||
        -z "$hardware_driver_manager_package" || ! -f "$hardware_driver_manager_package" ||
        -z "$recovery_diagnostics_package" || ! -f "$recovery_diagnostics_package" ||
       -z "$crash_watch_package" || ! -f "$crash_watch_package" ||
+      -z "$hooks_package" || ! -f "$hooks_package" ||
+      -z "$kernel_manager_package" || ! -f "$kernel_manager_package" ||
       -z "$update_package" || ! -f "$update_package" ||
       -z "$welcome_package" || ! -f "$welcome_package" ||
       -z "$keyring_package" || ! -f "$keyring_package" ||
@@ -227,6 +241,8 @@ hardware_driver_manager_package=$(realpath "$hardware_driver_manager_package")
 recovery_diagnostics_package=$(realpath "$recovery_diagnostics_package")
 crash_watch_package=$(realpath "$crash_watch_package")
 zeta_package=$(realpath "$zeta_package")
+hooks_package=$(realpath "$hooks_package")
+kernel_manager_package=$(realpath "$kernel_manager_package")
 update_package=$(realpath "$update_package")
 welcome_package=$(realpath "$welcome_package")
 keyring_package=$(realpath "$keyring_package")
@@ -322,6 +338,12 @@ if ! bsdtar -tf "$crash_watch_package" | grep -q 'linxira_crash_watch/skills/dia
   printf 'The crash-watch artifact does not contain the diagnose-crash skill.\n' >&2
   exit 1
 fi
+validate_package_artifact "$hooks_package" linxira-hooks \
+  usr/bin/linxira-update-initramfs \
+  usr/share/licenses/linxira-hooks/LICENSE
+validate_package_artifact "$kernel_manager_package" linxira-kernel-manager \
+  usr/bin/linxira-kernel-manager \
+  usr/share/licenses/linxira-kernel-manager/LICENSE
 validate_package_artifact "$update_package" linxira-update \
   usr/bin/linxira-update \
   etc/xdg/autostart/linxira-update-tray.desktop \
@@ -411,6 +433,8 @@ package_artifacts=(
   "$recovery_diagnostics_package"
   "$crash_watch_package"
   "$zeta_package"
+  "$hooks_package"
+  "$kernel_manager_package"
   "$update_package"
   "$welcome_package"
   "$keyring_package"
@@ -458,9 +482,10 @@ target_packages+=(amd-ucode intel-ucode)
 # Resolve Arch virtual providers without making the ISO build interactive.
 target_packages+=(pipewire-jack qt6-multimedia-ffmpeg mkinitcpio tesseract-data-eng)
 
-# 2026-10-25 决定: linxira-bio-sdk* 与 linxira-zeta* 不进系统(它们也可能不在离线仓库)。
-# 目标清单/桌面包清单里一旦出现, 构建直接失败, 避免悄悄装进镜像。
-forbidden=$(printf '%s\n' "${target_packages[@]}" | grep -E '^linxira-(bio-sdk|zeta)(-|$)' || true)
+# 2026-10-25 决定: linxira-bio-sdk* 不进系统(它们也可能不在离线仓库)。
+# linxira-zeta 是系统默认组件(桌面版默认安装, 随 update 升级), 不在禁止列表。
+# 目标清单/桌面包清单里一旦出现 bio-sdk, 构建直接失败, 避免悄悄装进镜像。
+forbidden=$(printf '%s\n' "${target_packages[@]}" | grep -E '^linxira-bio-sdk(-|$)' || true)
 if [[ -n "$forbidden" ]]; then
   printf '错误: 目标包清单含禁止安装项:\n%s\n' "$forbidden" >&2
   exit 66
