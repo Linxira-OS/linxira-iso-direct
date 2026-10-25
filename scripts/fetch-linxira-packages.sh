@@ -18,6 +18,8 @@ usage() {
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 profile_dir=$(cd -- "$script_dir/.." && pwd)
 repo_url=${LINXIRA_REPO_URL:-https://linxira-os.github.io/linxira-packages}
+# 附加仓: Zeta 套件(体量超过主仓单文件上限, 独立索引; 段名 linxira-zeta)
+zeta_repo_url=${LINXIRA_ZETA_REPO_URL:-https://github.com/Linxira-OS/packages/releases/download/zeta-repo}
 arch=${LINXIRA_ARCH:-x86_64}
 output_dir="${profile_dir}/.linxira-packages"
 
@@ -40,6 +42,7 @@ default_packages=(
   linxira-welcome
   linxira-wiki
   linxira-keyring
+  linxira-zeta
 )
 
 packages=()
@@ -90,17 +93,34 @@ printf 'Downloading %s ...\n' "$db_url" >&2
 curl -fsSL "$db_url" -o "$tmpdir/linxira.db.tar.zst"
 bsdtar -xf "$tmpdir/linxira.db.tar.zst" -C "$tmpdir"
 
-declare -A available available_csize available_sha256
-for desc in "$tmpdir"/*/desc; do
-  [[ -f "$desc" ]] || continue
-  pkgname=$(awk '/^%NAME%$/{getline; print; exit}' "$desc")
-  filename=$(awk '/^%FILENAME%$/{getline; print; exit}' "$desc")
-  csize=$(awk '/^%CSIZE%$/{getline; print; exit}' "$desc")
-  sha256=$(awk '/^%SHA256SUM%$/{getline; print; exit}' "$desc")
-  [[ -n "$pkgname" && -n "$filename" ]] && available[$pkgname]=$filename
-  available_csize[$pkgname]=$csize
-  available_sha256[$pkgname]=$sha256
-done
+declare -A available available_csize available_sha256 available_base
+
+parse_db() { # <解包目录> <下载基地址>
+  local dir=$1 base=$2 desc pkgname filename csize sha256
+  for desc in "$dir"/*/desc; do
+    [[ -f "$desc" ]] || continue
+    pkgname=$(awk '/^%NAME%$/{getline; print; exit}' "$desc")
+    filename=$(awk '/^%FILENAME%$/{getline; print; exit}' "$desc")
+    csize=$(awk '/^%CSIZE%$/{getline; print; exit}' "$desc")
+    sha256=$(awk '/^%SHA256SUM%$/{getline; print; exit}' "$desc")
+    [[ -n "$pkgname" && -n "$filename" ]] || continue
+    available[$pkgname]=$filename
+    available_csize[$pkgname]=$csize
+    available_sha256[$pkgname]=$sha256
+    available_base[$pkgname]=$base
+  done
+}
+
+parse_db "$tmpdir" "${repo}/${arch}"
+
+# 附加仓索引(缺省不致命: 只有请求 zeta 包时才需要)
+printf 'Downloading %s ...\n' "${zeta_repo_url%/}/linxira-zeta.db.tar.zst" >&2
+if curl -fsSL "${zeta_repo_url%/}/linxira-zeta.db.tar.zst" -o "$tmpdir/zeta.db.tar.zst" 2>/dev/null; then
+  mkdir -p "$tmpdir/zeta-db"
+  if bsdtar -xf "$tmpdir/zeta.db.tar.zst" -C "$tmpdir/zeta-db" 2>/dev/null; then
+    parse_db "$tmpdir/zeta-db" "${zeta_repo_url%/}"
+  fi
+fi
 
 missing=()
 for pkg in "${packages[@]}"; do
@@ -109,7 +129,7 @@ for pkg in "${packages[@]}"; do
     missing+=("$pkg")
     continue
   fi
-  url="${repo}/${arch}/${filename}"
+  url="${available_base[$pkg]}/${filename}"
   expected_size=${available_csize[$pkg]:-0}
   expected_sha=${available_sha256[$pkg]:-}
   # 2026-09-21: 镜像网络抖动会产出静默截断包, 逐包校验大小与 sha256, 重试三次。
