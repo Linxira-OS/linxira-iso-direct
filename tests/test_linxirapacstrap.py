@@ -124,9 +124,8 @@ class PacstrapSelectionTests(unittest.TestCase):
         self.assertEqual(result["selectedPackages"], self.plasma_packages)
         self.assertEqual(result["satisfiedItems"], ["desktop-plasma"])
 
-    def test_unverified_gnome_selection_fails_closed(self):
-        # 2026-08-13 产品决策: 桌面选择面收窄为 KDE Plasma / 服务器(无桌面)。
-        # gnome 等其余桌面移出选择面(installerVisible:false), 不再可安装期选择。
+    def test_removed_desktop_selection_fails_closed(self):
+        # 2026-10-25: 其余桌面条目已从目录删除 —— 引用它们必须失败关闭。
         selection = self.selection(
             {"desktop-gnome": "desktop-environments/desktop-gnome"}
         )

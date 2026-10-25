@@ -118,7 +118,7 @@ class BrandingConfigurationTests(unittest.TestCase):
         storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-plasma"]})
         with mock.patch.object(linxirabranding.libcalamares, "globalstorage", storage, create=True):
             self.assertTrue(linxirabranding._plasma_selected())
-        storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-gnome"]})
+        storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-cosmic"]})
         with mock.patch.object(linxirabranding.libcalamares, "globalstorage", storage, create=True):
             self.assertFalse(linxirabranding._plasma_selected())
 

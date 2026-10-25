@@ -53,15 +53,6 @@ class DesktopSessionTests(unittest.TestCase):
         session_file.touch()
         return temporary, root
 
-    def test_selected_gnome_session_is_written_for_sddm(self):
-        temporary, root = self.target("desktop-gnome")
-        with temporary:
-            session = linxirasession._selected_session(root)
-            linxirasession._write_sddm_state(root, session)
-            state = (root / "var/lib/sddm/state.conf").read_text(encoding="utf-8")
-        self.assertEqual(session, "gnome.desktop")
-        self.assertEqual(state, "[Last]\nSession=gnome.desktop\n")
-
     def test_selected_plasma_session_is_written_for_sddm(self):
         temporary, root = self.target("desktop-plasma")
         with temporary:
@@ -80,7 +71,7 @@ class DesktopSessionTests(unittest.TestCase):
         self.assertEqual(state, "[Last]\nSession=cosmic.desktop\n")
 
     def test_missing_or_multiple_desktops_fail_closed(self):
-        for selected in ([], ["desktop-plasma", "desktop-cosmic"], ["desktop-plasma", "desktop-gnome"]):
+        for selected in ([], ["desktop-plasma", "desktop-cosmic"], ["desktop-cosmic", "desktop-server"]):
             with self.subTest(selected=selected), tempfile.TemporaryDirectory() as directory:
                 receipt = Path(directory) / "var/lib/linxira/installer-selection.json"
                 receipt.parent.mkdir(parents=True)
@@ -93,7 +84,7 @@ class DesktopSessionTests(unittest.TestCase):
             receipt_path = Path(directory) / "var/lib/linxira/installer-selection.json"
             receipt_path.parent.mkdir(parents=True)
             receipt = self.receipt(["desktop-plasma"])
-            receipt["selectionDocument"]["selectedLeafIds"] = ["desktop-gnome"]
+            receipt["selectionDocument"]["selectedLeafIds"] = ["desktop-cosmic"]
             receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "inconsistent"):
                 linxirasession._selected_session(directory)

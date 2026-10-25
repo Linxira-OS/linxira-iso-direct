@@ -49,25 +49,10 @@ DESKTOP_REQUIREMENTS = {
         ),
     ),
     "desktop-plasma": ("plasma.desktop", ()),
-    "desktop-gnome": (
-        "gnome.desktop",
-        (
-            "file-roller",
-            "gnome-control-center",
-            "gnome-disk-utility",
-            "gnome-keyring",
-            "gnome-session",
-            "gnome-shell",
-            "gnome-terminal",
-            "gst-plugin-pipewire",
-            "nautilus",
-            "xdg-desktop-portal-gnome",
-            "xdg-desktop-portal-gtk",
-        ),
-    ),
-    # 2026-08-13: 无桌面服务器模式 —— 无 session/无显示管理器校验
+    # 2026-10-25: 只保留 Plasma + COSMIC 两个桌面, 其余桌面条目已从目录删除。
+    # 2026-08-13: 无桌面模式 —— 无 session/无显示管理器校验
     "desktop-server": (None, ()),
-    # 2026-09-20: 纯 Arch 最小安装 —— 同服务器, 基线为最小清单
+    # 2026-09-20: 超精简无桌面安装 —— 同无桌面, 基线为最小清单
     "desktop-server-minimal": (None, ()),
 }
 

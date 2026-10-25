@@ -86,16 +86,11 @@ class CatalogTests(unittest.TestCase):
             CANDIDATE_PACKAGES.read_text(encoding="utf-8").splitlines()
         )
         desktops = self.catalog["desktops"]
-        # 2026-08-13: 桌面选择面收窄为 KDE Plasma / 服务器(无桌面);
-        # 其余桌面保留元数据但 installerVisible:false。
-        # 2026-09-20: COSMIC 升级为第二个一等桌面, 与 Plasma 同级离线附带。
+        # 2026-10-25 产品决策: 只剩 Plasma + COSMIC 两个桌面与两个无桌面条目。
         self.assertEqual(
             [d["id"] for d in desktops],
-            ["desktop-plasma", "desktop-gnome", "desktop-xfce",
-             "desktop-hyprland", "desktop-sway", "desktop-cosmic",
-             "desktop-cinnamon", "desktop-lxqt", "desktop-lxde",
-             "desktop-mate", "desktop-budgie", "desktop-i3",
-             "desktop-openbox", "desktop-server", "desktop-server-minimal"],
+            ["desktop-plasma", "desktop-cosmic", "desktop-server",
+             "desktop-server-minimal"],
         )
         for desktop in desktops:
             self.assertEqual(desktop["review"]["status"], "reviewed")
@@ -111,14 +106,9 @@ class CatalogTests(unittest.TestCase):
         # COSMIC 顶层集合必须全部随镜像附带(pacstrap included-artifact 校验依赖)
         self.assertTrue(set(cosmic["artifact"]["ids"]).issubset(candidate_packages))
         self.assertIn("cosmic-session", candidate_packages)
-        # 其余桌面全为 online-only, 不出现在离线候选包中
-        for did in ("desktop-xfce", "desktop-lxqt", "desktop-lxde",
-                    "desktop-mate", "desktop-budgie", "desktop-i3",
-                    "desktop-openbox"):
-            d = next(dd for dd in desktops if dd["id"] == did)
-            self.assertEqual(d["availability"]["offlinePolicy"], "online-only")
-        self.assertNotIn("xfce4", candidate_packages)
-        self.assertNotIn("lightdm", candidate_packages)
+        # 已删除的桌面不得因残留而混入离线候选包
+        for removed in ("xfce4", "lightdm", "gnome-shell", "sway", "i3-wm"):
+            self.assertNotIn(removed, candidate_packages)
 
         build = (PROFILE_ROOT / "build-direct-iso.sh").read_text(encoding="utf-8")
         self.assertIn('target_packages+=("${candidate_packages[@]}")', build)

@@ -252,20 +252,20 @@ class InstalledSystemValidationTests(unittest.TestCase):
                 linxiravalidate._package_or_group_installed("/target", "base-devel")
             )
 
-    def test_gnome_receipt_adds_session_portal_and_keyring_requirements(self):
+    def test_cosmic_receipt_adds_session_and_package_requirements(self):
         with tempfile.TemporaryDirectory() as temporary_root:
             receipt = Path(temporary_root) / "var/lib/linxira/installer-selection.json"
             receipt.parent.mkdir(parents=True)
             receipt.write_text(
-                json.dumps(self.receipt(["desktop-gnome"])),
+                json.dumps(self.receipt(["desktop-cosmic"])),
                 encoding="utf-8",
             )
             desktop, session, packages = linxiravalidate._selection_requirements(temporary_root)
-        self.assertEqual(desktop, "desktop-gnome")
-        self.assertEqual(session, "gnome.desktop")
-        self.assertIn("gnome-keyring", packages)
-        self.assertIn("xdg-desktop-portal-gnome", packages)
-        self.assertIn("xdg-desktop-portal-gtk", packages)
+        self.assertEqual(desktop, "desktop-cosmic")
+        self.assertEqual(session, "cosmic.desktop")
+        self.assertIn("cosmic-session", packages)
+        self.assertIn("cosmic-settings", packages)
+        self.assertIn("xdg-desktop-portal-cosmic", packages)
 
     def test_validator_rejects_inconsistent_nested_selection(self):
         with tempfile.TemporaryDirectory() as temporary_root:
@@ -286,7 +286,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
             '"gdm"',
             '"/usr/lib/systemd/system/sddm.service"',
             '"plasma.desktop"',
-            '"gnome.desktop"',
+            '"cosmic.desktop"',
         ):
             self.assertIn(value, source)
 
