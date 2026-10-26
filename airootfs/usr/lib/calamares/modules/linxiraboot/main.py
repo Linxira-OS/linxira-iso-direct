@@ -29,7 +29,7 @@ GRUB_SETTINGS = [
     # 2026-10-26: 安装后保持与 ISO 一致的引导外观(不再是一片黑白纯文本)。
     ("GRUB_TERMINAL_OUTPUT", '"gfxterm"'),
     ("GRUB_TIMEOUT_STYLE", '"menu"'),
-    ("GRUB_THEME", '"/boot/grub/themes/linxira/theme-16x9-24.txt"'),
+    ("GRUB_THEME", '"/boot/grub/themes/linxira/theme-24.txt"'),
     ("GRUB_GFXMODE", '"auto"'),
     ("GRUB_GFXPAYLOAD_LINUX", '"keep"'),
     ("GRUB_BACKGROUND", '"/boot/grub/linxira-splash.png"'),
@@ -241,15 +241,7 @@ if loadfont "$theme_dir/fonts/linxira-ui-24.pf2" ; then
             ui=32
         fi
     fi
-    aspect=16x9
-    if [ -n "$gfxwidth" ] && [ -n "$gfxheight" ]; then
-        if [ $((gfxwidth * 10)) -le $((gfxheight * 16)) ]; then
-            aspect=16x10
-        elif [ $((gfxwidth * 9)) -gt $((gfxheight * 21)) ]; then
-            aspect=21x9
-        fi
-    fi
-    set theme="$theme_dir/theme-${aspect}-${ui}.txt"
+    set theme="$theme_dir/theme-$ui.txt"
 fi
 """
 

@@ -32,7 +32,7 @@ class BootMenuTests(unittest.TestCase):
     def test_installed_grub_keeps_the_branded_menu(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TERMINAL_OUTPUT"], '"gfxterm"')
-        self.assertEqual(settings["GRUB_THEME"], '"/boot/grub/themes/linxira/theme-16x9-24.txt"')
+        self.assertEqual(settings["GRUB_THEME"], '"/boot/grub/themes/linxira/theme-24.txt"')
         self.assertEqual(settings["GRUB_BACKGROUND"], '"/boot/grub/linxira-splash.png"')
         self.assertIn("GRUB_COLOR_HIGHLIGHT", settings)
 
@@ -58,8 +58,8 @@ class BootMenuTests(unittest.TestCase):
             self.assertEqual((root / "boot/grub/linxira-splash.png").read_bytes(), source.read_bytes())
             self.assertEqual((root / "usr/share/linxira/grub/splash.png").read_bytes(), source.read_bytes())
             theme_dest = root / "boot/grub/themes/linxira"
-            self.assertTrue((theme_dest / "theme-16x9-24.txt").is_file())
-            self.assertTrue((theme_dest / "bg-16x9.png").is_file())
+            self.assertTrue((theme_dest / "theme-24.txt").is_file())
+            self.assertTrue((theme_dest / "background.png").is_file())
             self.assertTrue((theme_dest / "fonts/linxira-ui-32.pf2").is_file())
 
 
