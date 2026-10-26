@@ -34,13 +34,14 @@ class GrubThemeTests(unittest.TestCase):
                 kind = line[1:].strip().split()[0].rstrip("{").strip()
                 self.assertIn(kind, OBJECT_TYPES, f"{path.name}: {line}")
             self.assertIn('desktop-image: "background.png"', text)
-            self.assertIn(f'item_font = "DejaVu Sans Mono {size}"', text)
+            self.assertIn(f'item_font = "DejaVu Sans Mono Regular {size}"', text)
             self.assertIn('id = "__timeout__"', text)
 
     def test_background_and_fonts_exist(self):
         self.assertTrue((THEME_DIR / "background.png").is_file())
         for size in SIZES:
             self.assertTrue((THEME_DIR / f"fonts/linxira-ui-{size}.pf2").is_file())
+            self.assertTrue((THEME_DIR / f"fonts/linxira-ui-bold-{size}.pf2").is_file())
 
     def test_selector_has_no_arithmetic(self):
         # GRUB 脚本不支持 $(( )); 只用简单比较。

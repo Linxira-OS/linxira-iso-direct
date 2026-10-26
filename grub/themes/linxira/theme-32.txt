@@ -6,11 +6,11 @@ title-font: "DejaVu Sans Mono Bold 32"
 title-color: "#F8FAFC"
 
 + boot_menu {
-    left = 8%
+    left = 6%
     top = 26%
-    width = 42%
+    width = 56%
     height = 50%
-    item_font = "DejaVu Sans Mono 32"
+    item_font = "DejaVu Sans Mono Regular 32"
     item_color = "#C7D2DA"
     selected_item_color = "#20B8B0"
     item_height = 58
@@ -22,13 +22,13 @@ title-color: "#F8FAFC"
 }
 
 + label {
-    left = 8%
+    left = 6%
     top = 80%
-    width = 42%
+    width = 56%
     align = "left"
-    font = "DejaVu Sans Mono 32"
+    font = "DejaVu Sans Mono Regular 32"
     color = "#64748B"
-    text = "Up/Down select   Enter boot   e edit"
+    text = "Up/Down: select   Enter: boot"
 }
 
 + label {
@@ -36,7 +36,7 @@ title-color: "#F8FAFC"
     left = 8%
     top = 84%
     align = "left"
-    font = "DejaVu Sans Mono 32"
+    font = "DejaVu Sans Mono Regular 32"
     color = "#64748B"
     text = "%d"
 }

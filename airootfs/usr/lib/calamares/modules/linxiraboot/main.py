@@ -231,6 +231,10 @@ if loadfont "$theme_dir/fonts/linxira-ui-24.pf2" ; then
     loadfont "$theme_dir/fonts/linxira-ui-32.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-40.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-48.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-bold-24.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-bold-32.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-bold-40.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-bold-48.pf2"
     ui=24
     if [ -n "$gfxheight" ]; then
         if [ "$gfxheight" -gt 2400 ]; then
