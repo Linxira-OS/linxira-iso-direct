@@ -1036,6 +1036,51 @@ def _configure_chinese_input_method(root, installer_locale):
         )
 
 
+ESP_MOUNTPOINT = "boot/efi"
+MIB = 1024 * 1024
+ESP_MIN_TOTAL = 64 * MIB
+ESP_MIN_FREE_GRUB = 32 * MIB
+ESP_MIN_TOTAL_KERNEL_IN_ESP = 900 * MIB
+ESP_MIN_FREE_KERNEL_IN_ESP = 512 * MIB
+
+
+def _efi_capacity_error(root, bootloader):
+    """ESP 容量硬门禁。
+
+    Windows 的 ESP 默认只有 100–128 MiB。GRUB 只写几 MB，但 systemd-boot / rEFInd
+    会把内核与 initramfs 放进 ESP（数 GB 级需求）。空间不够必须在动磁盘之前拒绝,
+    不能赌。
+    """
+    esp = Path(root) / ESP_MOUNTPOINT
+    if not esp.is_dir():
+        return (
+            "EFI 分区未挂载 (EFI system partition is not mounted)",
+            "UEFI 安装需要一个 FAT32 的 ESP 挂载到 /boot/efi。",
+        )
+    stats = os.statvfs(esp)
+    total = stats.f_frsize * stats.f_blocks
+    free = stats.f_frsize * stats.f_bavail
+    if total < ESP_MIN_TOTAL:
+        return (
+            "ESP 容量过小 (EFI system partition is too small)",
+            f"ESP 共 {total // MIB} MiB，至少需要 {ESP_MIN_TOTAL // MIB} MiB。",
+        )
+    if bootloader in ("systemd-boot", "refind"):
+        if total < ESP_MIN_TOTAL_KERNEL_IN_ESP or free < ESP_MIN_FREE_KERNEL_IN_ESP:
+            return (
+                "ESP 容量不足 (not enough room for kernels in the ESP)",
+                f"{bootloader} 需要 ESP ≥ {ESP_MIN_TOTAL_KERNEL_IN_ESP // MIB} MiB 且剩余 "
+                f"≥ {ESP_MIN_FREE_KERNEL_IN_ESP // MIB} MiB；当前共 {total // MIB} MiB、"
+                f"剩余 {free // MIB} MiB。请改选 GRUB 或重建更大的 ESP。",
+            )
+    elif free < ESP_MIN_FREE_GRUB:
+        return (
+            "ESP 剩余空间不足 (not enough free space on the ESP)",
+            f"GRUB 至少需要 {ESP_MIN_FREE_GRUB // MIB} MiB 可用空间；当前剩余 {free // MIB} MiB。",
+        )
+    return None
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     config = libcalamares.job.configuration or {}
@@ -1046,6 +1091,12 @@ def run():
 
     if not root or not os.path.ismount(root):
         return "Target is not mounted", "The target root mount is unavailable."
+    # 只有 UEFI 安装才有 ESP; BIOS/legacy 跳过容量门禁。
+    if (libcalamares.globalstorage.value("firmwareType") or "") == "efi":
+        bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
+        capacity_error = _efi_capacity_error(root, bootloader)
+        if capacity_error:
+            return capacity_error
     if not pacman_config or not os.path.isfile(pacman_config):
         return "Offline configuration is missing", str(pacman_config)
     if not repository or not os.path.isdir(repository):

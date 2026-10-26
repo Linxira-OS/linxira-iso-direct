@@ -728,3 +728,68 @@ class PacstrapSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class EfiCapacityTests(unittest.TestCase):
+    """ESP 容量门禁: 不能赌 Windows 100 MiB ESP 放得下内核。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        (self.root / "boot/efi").mkdir(parents=True)
+
+    @staticmethod
+    def _statvfs(total_mib, free_mib):
+        block = 4096
+        return types.SimpleNamespace(
+            f_frsize=block,
+            f_blocks=total_mib * 1024 * 1024 // block,
+            f_bavail=free_mib * 1024 * 1024 // block,
+        )
+
+    def capacity(self, bootloader, total_mib, free_mib):
+        with mock.patch.object(
+            linxirapacstrap.os, "statvfs", create=True,
+            return_value=self._statvfs(total_mib, free_mib)
+        ):
+            return linxirapacstrap._efi_capacity_error(self.root, bootloader)
+
+    def test_grub_fits_a_windows_sized_esp(self):
+        self.assertIsNone(self.capacity("grub", 100, 60))
+
+    def test_grub_rejects_an_almost_full_esp(self):
+        error = self.capacity("grub", 100, 10)
+        self.assertIsNotNone(error)
+        self.assertIn("ESP", error[0])
+
+    def test_kernel_in_esp_bootloaders_reject_small_esp(self):
+        for bootloader in ("systemd-boot", "refind"):
+            with self.subTest(bootloader=bootloader):
+                error = self.capacity(bootloader, 100, 60)
+                self.assertIsNotNone(error)
+                self.assertIn(bootloader, error[1])
+
+    def test_kernel_in_esp_bootloaders_accept_a_large_esp(self):
+        self.assertIsNone(self.capacity("refind", 1024, 800))
+
+    def test_missing_esp_fails_closed(self):
+        empty = self.root / "empty"
+        empty.mkdir()
+        self.assertIsNotNone(linxirapacstrap._efi_capacity_error(empty, "grub"))
+
+    def test_run_stops_before_pacstrap_when_esp_is_too_full(self):
+        store = {
+            "rootMountPoint": str(self.root),
+            "packagechooser_bootloader": "refind",
+            "firmwareType": "efi",
+        }
+        with mock.patch.object(
+            linxirapacstrap.libcalamares.globalstorage, "value", side_effect=store.get
+        ), mock.patch.object(linxirapacstrap.os.path, "ismount", return_value=True), \
+             mock.patch.object(
+                 linxirapacstrap.os, "statvfs", create=True,
+                 return_value=self._statvfs(100, 60)
+             ):
+            result = linxirapacstrap.run()
+        self.assertIsInstance(result, tuple)
+        self.assertIn("ESP", result[0])
