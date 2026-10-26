@@ -37,6 +37,19 @@ class GrubThemeTests(unittest.TestCase):
             self.assertIn(f'item_font = "DejaVu Sans Mono Regular {size}"', text)
             self.assertIn('id = "__timeout__"', text)
 
+    def test_small_vm_modes_fit_without_scrolling(self):
+        import re
+
+        text = (THEME_DIR / "theme-20.txt").read_text(encoding="utf-8")
+        item_height = int(re.search(r"item_height = (\d+)", text).group(1))
+        self.assertIn("height = 50%", text)
+        for height in (480, 600, 768):
+            with self.subTest(height=height):
+                # 6 个菜单项必须放得进 50% 的屏高
+                self.assertLessEqual(item_height * 6, height // 2)
+                # 提示行/倒计时仍在屏内
+                self.assertLess(0.84 * height, height)
+
     def test_background_and_fonts_exist(self):
         self.assertTrue((THEME_DIR / "background.png").is_file())
         for size in SIZES:
