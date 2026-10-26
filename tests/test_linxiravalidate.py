@@ -68,6 +68,21 @@ class InstalledSystemValidationTests(unittest.TestCase):
         ):
             self.assertIn(value, source)
 
+    def test_version_check_accepts_newer_and_rejects_older(self):
+        newer = types.SimpleNamespace(returncode=0, stdout="1\n", stderr="")
+        equal = types.SimpleNamespace(returncode=0, stdout="0\n", stderr="")
+        older = types.SimpleNamespace(returncode=0, stdout="-1\n", stderr="")
+        module = linxiravalidate
+        with mock.patch.object(module.subprocess, "run", return_value=newer):
+            self.assertTrue(module._version_is_newer_or_equal("1.24.0-1", "1.23.0-3"))
+        with mock.patch.object(module.subprocess, "run", return_value=equal):
+            self.assertTrue(module._version_is_newer_or_equal("1.23.0-3", "1.23.0-3"))
+        with mock.patch.object(module.subprocess, "run", return_value=older):
+            self.assertFalse(module._version_is_newer_or_equal("1.23.0-2", "1.23.0-3"))
+        with mock.patch.object(module.subprocess, "run", side_effect=OSError):
+            self.assertTrue(module._version_is_newer_or_equal("1.23.0-3", "1.23.0-3"))
+            self.assertFalse(module._version_is_newer_or_equal("1.23.0-2", "1.23.0-3"))
+
     def test_validator_requires_installer_selection_receipt(self):
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertIn('"/var/lib/linxira/installer-selection.json"', source)

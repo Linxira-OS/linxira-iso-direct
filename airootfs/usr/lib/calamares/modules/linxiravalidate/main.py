@@ -223,6 +223,29 @@ def _package_or_group_installed(root, target):
 
 
 EXPECTED_VERSIONS_PATH = "/etc/linxira/expected-versions"
+VERCMP = "/usr/bin/vercmp"
+
+
+def _version_is_newer_or_equal(installed, expected):
+    """滚动发行: 安装期取离线仓库的冻结版本, 但允许更高版本(如在线先行升级)。
+
+    只有比镜像更旧才判定失败; vercmp 不可用时退化为严格相等。
+    """
+    try:
+        result = subprocess.run(
+            [VERCMP, installed, expected],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return installed == expected
+    if result.returncode != 0:
+        return installed == expected
+    try:
+        return int(result.stdout.strip()) >= 0
+    except (TypeError, ValueError):
+        return installed == expected
 
 
 def _expected_versions():
@@ -438,8 +461,10 @@ def run():
         installed = _package_version(root, package)
         if installed is None:
             failures.append("could not verify package version: " + package)
-        elif installed != version:
-            failures.append(f"unexpected package version: {package} {installed} (expected {version})")
+        elif not _version_is_newer_or_equal(installed, version):
+            failures.append(
+                f"installed package is older than the image: {package} {installed} (image {version})"
+            )
     if _package_installed(root, "gdm"):
         failures.append("unsupported display manager installed: gdm")
 
