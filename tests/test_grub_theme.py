@@ -18,7 +18,7 @@ OBJECT_TYPES = {
     "hbox",
     "canvas",
 }
-SIZES = (24, 32, 40, 48)
+SIZES = (20, 24, 32, 40, 48)
 
 
 class GrubThemeTests(unittest.TestCase):

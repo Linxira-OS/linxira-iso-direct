@@ -231,18 +231,22 @@ if loadfont "$theme_dir/fonts/linxira-ui-24.pf2" ; then
     loadfont "$theme_dir/fonts/linxira-ui-32.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-40.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-48.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-20.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-bold-20.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-bold-24.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-bold-32.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-bold-40.pf2"
     loadfont "$theme_dir/fonts/linxira-ui-bold-48.pf2"
-    ui=24
+    ui=20
     if [ -n "$gfxheight" ]; then
         if [ "$gfxheight" -gt 2400 ]; then
             ui=48
-        elif [ "$gfxheight" -gt 1800 ]; then
+        elif [ "$gfxheight" -gt 1700 ]; then
             ui=40
         elif [ "$gfxheight" -gt 1200 ]; then
             ui=32
+        elif [ "$gfxheight" -gt 800 ]; then
+            ui=24
         fi
     fi
     set theme="$theme_dir/theme-$ui.txt"
