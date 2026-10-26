@@ -53,12 +53,13 @@ class InstallRetryCleanupTests(unittest.TestCase):
         self.assertNotIn("interface: shellprocess", conf)
         self.assertNotIn("chroot:", conf)
 
-    def test_partition_page_stays_on_proven_none(self):
-        # 2026-09-29: erase 预选触发 calamares 启动 SIGABRT(134), 回退 none;
-        # 重试可用性由启动清场保证, 不依赖预选。
+    def test_partition_page_defaults_to_alongside(self):
+        # 2026-10-26: 134 真因是 pkexec 剥离环境后 wayland socket 名不匹配,
+        # 与预选无关(已在 VM 复现)。默认改预选「与 Windows 共存」, 避免小白
+        # 闭眼选到第一项「擦除磁盘」把 Windows 抹掉; 无其他系统时 Calamares 回落。
         conf = PARTITION.read_text(encoding="utf-8")
-        self.assertIn("initialPartitioningChoice: none", conf)
-        self.assertIn("allowManualPartitioning: false", conf)
+        self.assertIn("initialPartitioningChoice: alongside", conf)
+        self.assertIn("allowManualPartitioning: true", conf)
 
     def test_cleanup_script_is_executable_in_the_iso(self):
         # 2026-09-29 实测: 漏登记 file_permissions → 脚本 644 → pkexec 报

@@ -1037,6 +1037,63 @@ def _configure_chinese_input_method(root, installer_locale):
 
 
 ESP_MOUNTPOINT = "boot/efi"
+PARTITION_SUFFIX = re.compile(r"^(?P<disk>nvme\d+n\d+|mmcblk\d+|loop\d+)p\d+$")
+SIMPLE_DISK = re.compile(r"^(?P<disk>[a-zA-Z]+)\d+$")
+
+
+def _findmnt_source(path):
+    try:
+        result = subprocess.run(
+            ["findmnt", "-no", "SOURCE", "--target", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    source = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
+    return source.split("[")[0] or None
+
+
+def _parent_disk_name(device):
+    """sda2 -> sda, nvme0n1p2 -> nvme0n1, mmcblk0p1 -> mmcblk0."""
+    name = os.path.basename(device)
+    match = PARTITION_SUFFIX.match(name) or SIMPLE_DISK.match(name)
+    return match.group("disk") if match else name
+
+
+def _read_first_line(path):
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _target_disk_error(root, source=None, live_source=None, sysfs_root="/sys"):
+    """拒绝把系统装进可移动/U 盘, 或装到当前 live 介质所在的盘。"""
+    source = source if source is not None else _findmnt_source(root)
+    if not source:
+        return None  # 无法判定时不阻断, 避免误伤
+    device = os.path.basename(source)
+    disk = _parent_disk_name(device)
+    sys_block = Path(sysfs_root) / "block" / disk
+    removable = _read_first_line(sys_block / "removable")
+    model = _read_first_line(sys_block / "device" / "model") or disk
+    if removable == "1":
+        return (
+            "目标磁盘是可移动设备 (target disk is removable)",
+            f"{source} 挂在 {model} 上, 系统不能安装到 U 盘/移动硬盘。请选择内置 SSD/HDD。",
+        )
+    live_source = live_source if live_source is not None else _findmnt_source("/run/archiso/bootmnt")
+    if live_source:
+        live_disk = _parent_disk_name(live_source)
+        if live_disk == disk:
+            return (
+                "目标磁盘就是启动介质 (target disk is the live medium)",
+                f"{source} 与安装介质同在一块盘上。请换一块盘安装, 否则会覆盖安装介质。",
+            )
+    return None
+
 MIB = 1024 * 1024
 ESP_MIN_TOTAL = 64 * MIB
 ESP_MIN_FREE_GRUB = 32 * MIB
@@ -1092,6 +1149,9 @@ def run():
     if not root or not os.path.ismount(root):
         return "Target is not mounted", "The target root mount is unavailable."
     # 只有 UEFI 安装才有 ESP; BIOS/legacy 跳过容量门禁。
+    disk_error = _target_disk_error(root)
+    if disk_error:
+        return disk_error
     if (libcalamares.globalstorage.value("firmwareType") or "") == "efi":
         bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
         capacity_error = _efi_capacity_error(root, bootloader)

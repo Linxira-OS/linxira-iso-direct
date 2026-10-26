@@ -793,3 +793,56 @@ class EfiCapacityTests(unittest.TestCase):
             result = linxirapacstrap.run()
         self.assertIsInstance(result, tuple)
         self.assertIn("ESP", result[0])
+
+class TargetDiskTests(unittest.TestCase):
+    """拒绝装进可移动盘 / 装到 live 介质所在盘。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.sysfs = Path(self._tmp.name)
+        self.root = self.sysfs / "target"
+        self.root.mkdir()
+
+    def fake_disk(self, disk, removable="0", model="Samsung SSD"):
+        base = self.sysfs / "block" / disk
+        (base / "device").mkdir(parents=True)
+        (base / "removable").write_text(removable + "\n", encoding="utf-8")
+        (base / "device" / "model").write_text(model + "\n", encoding="utf-8")
+
+    def test_partition_names_map_to_parent_disks(self):
+        cases = {
+            "sda2": "sda",
+            "vda1": "vda",
+            "nvme0n1p2": "nvme0n1",
+            "mmcblk0p1": "mmcblk0",
+            "/dev/sdb3": "sdb",
+        }
+        for device, expected in cases.items():
+            with self.subTest(device=device):
+                self.assertEqual(linxirapacstrap._parent_disk_name(device), expected)
+
+    def test_internal_ssd_is_accepted(self):
+        self.fake_disk("sda")
+        self.assertIsNone(
+            linxirapacstrap._target_disk_error(
+                self.root, source="/dev/sda2", live_source="/dev/sdb1", sysfs_root=self.sysfs
+            )
+        )
+
+    def test_removable_target_is_rejected(self):
+        self.fake_disk("sda", removable="1", model="USB DISK 3.0")
+        error = linxirapacstrap._target_disk_error(
+            self.root, source="/dev/sda2", live_source=None, sysfs_root=self.sysfs
+        )
+        self.assertIsNotNone(error)
+        self.assertIn("可移动", error[0])
+        self.assertIn("USB DISK", error[1])
+
+    def test_live_medium_disk_is_rejected(self):
+        self.fake_disk("sdb")
+        error = linxirapacstrap._target_disk_error(
+            self.root, source="/dev/sdb2", live_source="/dev/sdb1", sysfs_root=self.sysfs
+        )
+        self.assertIsNotNone(error)
+        self.assertIn("启动介质", error[0])
