@@ -37,3 +37,12 @@ class BootOrderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class FirmwareInteractionTests(unittest.TestCase):
+    def test_installer_does_not_touch_the_generic_efi_fallback(self):
+        # 共用 ESP 时覆盖 \EFI\BOOT\BOOTX64.EFI 会破坏固件回退路径。
+        config = (PROFILE_ROOT / "airootfs/etc/calamares/modules/bootloader.conf").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("installEFIFallback: false", config)
+        self.assertIn("efiBootloaderId: linxira", config)
