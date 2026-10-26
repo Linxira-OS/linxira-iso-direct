@@ -21,7 +21,7 @@ repo_url=${LINXIRA_REPO_URL:-https://linxira-os.github.io/linxira-packages}
 arch=${LINXIRA_ARCH:-x86_64}
 # 附加仓: Zeta 套件(体量超过主仓单文件上限, 独立索引; 段名 linxira-zeta)
 # 首选与主仓同域的 Pages(国内可达), Release 作为回退。
-zeta_repo_url=${LINXIRA_ZETA_REPO_URL:-https://linxira-os.github.io/linxira-packages/zeta/$arch}
+zeta_repo_url=${LINXIRA_ZETA_REPO_URL:-https://linxira-os.github.io/packages/zeta/$arch}
 zeta_repo_fallback=${LINXIRA_ZETA_REPO_FALLBACK:-https://github.com/Linxira-OS/packages/releases/download/zeta-repo}
 output_dir="${profile_dir}/.linxira-packages"
 
