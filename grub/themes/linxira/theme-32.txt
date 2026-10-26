@@ -6,9 +6,9 @@ title-font: "DejaVu Sans Mono Bold 32"
 title-color: "#F8FAFC"
 
 + boot_menu {
-    left = 6%
+    left = 4%
     top = 26%
-    width = 56%
+    width = 92%
     height = 50%
     item_font = "DejaVu Sans Mono Regular 32"
     item_color = "#C7D2DA"
@@ -22,9 +22,9 @@ title-color: "#F8FAFC"
 }
 
 + label {
-    left = 6%
+    left = 4%
     top = 80%
-    width = 56%
+    width = 92%
     align = "left"
     font = "DejaVu Sans Mono Regular 32"
     color = "#64748B"
@@ -33,7 +33,7 @@ title-color: "#F8FAFC"
 
 + label {
     id = "__timeout__"
-    left = 8%
+    left = 4%
     top = 84%
     align = "left"
     font = "DejaVu Sans Mono Regular 32"
