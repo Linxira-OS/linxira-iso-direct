@@ -5,6 +5,7 @@ from pathlib import Path
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 
 import libcalamares
@@ -390,12 +391,34 @@ def _validate_minimal_system(root, bootloader, bootloader_package):
     return None
 
 
+def _ensure_efi_fallback(root):
+    """独立 ESP 上补 \\EFI\\BOOT\\BOOTX64.EFI。
+
+    UEFI 固件在 NVRAM 条目缺失时会回退到该路径; 但共用 Windows ESP 时它属于
+    Windows, 不能覆盖。因此只在 ESP 上没有 Microsoft 引导文件时复制。
+    """
+    esp = Path(root) / "boot/efi"
+    loader = esp / "EFI/linxira/grubx64.efi"
+    fallback = esp / "EFI/BOOT/BOOTX64.EFI"
+    windows = esp / "EFI/Microsoft/Boot/bootmgfw.efi"
+    if not loader.is_file() or windows.exists() or fallback.exists():
+        return False
+    fallback.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(loader, fallback)
+    return True
+
+
 def run():
     root = libcalamares.globalstorage.value("rootMountPoint")
     failures = []
 
     if not root or not os.path.ismount(root):
         return "Target is not mounted", "The target root mount is unavailable."
+
+    try:
+        _ensure_efi_fallback(root)
+    except OSError as error:
+        libcalamares.utils.warning(f"linxiravalidate: EFI fallback copy failed: {error}")
 
     try:
         desktop, selected_session, selected_packages = _selection_requirements(root)

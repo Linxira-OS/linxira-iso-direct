@@ -68,6 +68,45 @@ class InstalledSystemValidationTests(unittest.TestCase):
         ):
             self.assertIn(value, source)
 
+    def _esp_root(self, windows=False, fallback=False):
+        import tempfile
+        from pathlib import Path
+
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        loader = root / "boot/efi/EFI/linxira/grubx64.efi"
+        loader.parent.mkdir(parents=True)
+        loader.write_bytes(b"grub")
+        if windows:
+            (root / "boot/efi/EFI/Microsoft/Boot").mkdir(parents=True)
+            (root / "boot/efi/EFI/Microsoft/Boot/bootmgfw.efi").write_bytes(b"win")
+        if fallback:
+            (root / "boot/efi/EFI/BOOT").mkdir(parents=True)
+            (root / "boot/efi/EFI/BOOT/BOOTX64.EFI").write_bytes(b"old")
+        return root
+
+    def test_efi_fallback_is_added_on_a_dedicated_esp(self):
+        from pathlib import Path
+
+        root = self._esp_root()
+        self.assertTrue(linxiravalidate._ensure_efi_fallback(root))
+        self.assertEqual(
+            (root / "boot/efi/EFI/BOOT/BOOTX64.EFI").read_bytes(), b"grub"
+        )
+
+    def test_efi_fallback_never_touches_a_shared_windows_esp(self):
+        root = self._esp_root(windows=True)
+        self.assertFalse(linxiravalidate._ensure_efi_fallback(root))
+        self.assertFalse((root / "boot/efi/EFI/BOOT/BOOTX64.EFI").exists())
+
+    def test_efi_fallback_keeps_an_existing_file(self):
+        root = self._esp_root(fallback=True)
+        self.assertFalse(linxiravalidate._ensure_efi_fallback(root))
+        self.assertEqual(
+            (root / "boot/efi/EFI/BOOT/BOOTX64.EFI").read_bytes(), b"old"
+        )
+
     def test_version_check_accepts_newer_and_rejects_older(self):
         newer = types.SimpleNamespace(returncode=0, stdout="1\n", stderr="")
         equal = types.SimpleNamespace(returncode=0, stdout="0\n", stderr="")
