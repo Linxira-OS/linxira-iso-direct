@@ -41,9 +41,16 @@ fi
 
 display_platform=xcb
 wayland_socket=''
-if [ -d "$runtime_dir" ]; then
-  wayland_socket=$(ls -1 "$runtime_dir"/wayland-* 2>/dev/null | head -n 1) || true
-fi
+# 合成器 socket 可能比 Welcome 晚就绪(或叫 wayland-1 而不是 wayland-0) —— 短暂等待,
+# 不要写死名字; 超时后再退回 X11。
+wait_rounds=${LINXIRA_WAYLAND_WAIT:-10}
+for _ in $(seq 1 "$wait_rounds"); do
+  if [ -d "$runtime_dir" ]; then
+    wayland_socket=$(ls -1 "$runtime_dir"/wayland-* 2>/dev/null | head -n 1) || true
+  fi
+  [ -n "$wayland_socket" ] && break
+  sleep 0.5
+done
 if [ -n "$wayland_socket" ]; then
   display_platform=wayland
   wayland_socket=${wayland_socket##*/}

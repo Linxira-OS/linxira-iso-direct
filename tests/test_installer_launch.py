@@ -53,6 +53,7 @@ class InstallerLaunchContractTests(unittest.TestCase):
             "LINXIRA_CALAMARES": str(self.calamares),
             "LINXIRA_APP_DATA": str(self.root / "appdata"),
             "LINXIRA_QML_TARGET": str(self.root / "qml"),
+            "LINXIRA_WAYLAND_WAIT": "1",
         }
         if extra_env:
             env.update(extra_env)
