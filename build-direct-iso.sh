@@ -406,8 +406,13 @@ if ! grep -Fq 'L+ /etc/calamares/qml' "${profile_copy}/airootfs/usr/lib/tmpfiles
   printf '错误: tmpfiles 未提供 calamares qml 兜底\n' >&2
   exit 1
 fi
-bypass=$(grep -rIlE '(^|[[:space:]])(exec[[:space:]]+)?/usr/bin/calamares([[:space:]]|$)' \
+bypass=$(grep -rIlE '^[[:space:]]*(exec[[:space:]]+|pkexec[[:space:]]+)?/usr/bin/calamares([[:space:]]|$)' \
   "${profile_copy}/airootfs" 2>/dev/null | grep -v '/linxira-installer-shell$' || true)
+desktop_bypass=$(grep -rlE '^[[:space:]]*Exec=.*/usr/bin/calamares' \
+  "${profile_copy}/airootfs" --include='*.desktop' 2>/dev/null || true)
+if [[ -n "$desktop_bypass" ]]; then
+  bypass="${bypass}${bypass:+$'\n'}${desktop_bypass}"
+fi
 if [[ -n "$bypass" ]]; then
   printf '错误: 存在绕过启动器直接启动 calamares 的路径:\n%s\n' "$bypass" >&2
   exit 1
