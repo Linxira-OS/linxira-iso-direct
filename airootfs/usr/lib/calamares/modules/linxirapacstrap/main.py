@@ -793,6 +793,32 @@ def _enable_target_linxira_repo(root):
     config_path.write_text(contents, encoding="utf-8")
 
 
+def _apply_branding(root, minimal_baseline):
+    """Apply Linxira OS branding in the target.
+
+    linxira-hooks 与 filesystem 同批 pacstrap 安装, pacman 不会执行同一事务里
+    新装包带来的 hook; 不显式调用, 装完的系统仍显示 "Arch Linux"。
+    """
+    if minimal_baseline:
+        return None
+    script = Path(root) / "usr/share/libalpm/scripts/linxira-branding"
+    if not script.is_file():
+        return None
+    error = _run_with_retries(
+        ["arch-chroot", root, "/usr/share/libalpm/scripts/linxira-branding"],
+        "Linxira OS branding",
+        1,
+    )
+    if error:
+        return error
+    os_release = Path(root) / "usr/lib/os-release"
+    if os_release.is_file() and 'PRETTY_NAME="Linxira OS"' not in os_release.read_text(
+        encoding="utf-8"
+    ):
+        return "os-release branding did not apply"
+    return None
+
+
 def _pacstrap_command(pacman_config, root, packages):
     return [
         "pacstrap",
@@ -1237,6 +1263,13 @@ def run():
     # Offline package source is only needed during pacstrap. Remove it for every
     # install (pure offline included), independent of whether online packages exist.
     _remove_offline_repo(root)
+
+    # linxira-hooks 与 filesystem 在同一个 pacstrap 事务里安装, pacman 不会在
+    # 该事务内执行新装包带来的 hook —— 必须显式跑一次品牌脚本, 否则装完系统
+    # /etc/os-release 仍是 "Arch Linux"。纯 Arch 最小安装保持原样。
+    branding_error = _apply_branding(root, result.get("minimalBaseline", False))
+    if branding_error:
+        return "Target configuration could not be finalized", branding_error
 
     try:
         _enable_target_multilib(root)

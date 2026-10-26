@@ -846,3 +846,48 @@ class TargetDiskTests(unittest.TestCase):
         )
         self.assertIsNotNone(error)
         self.assertIn("启动介质", error[0])
+
+
+class BrandingTests(unittest.TestCase):
+    """pacstrap 同事务的 hook 不执行, 安装器必须显式品牌化目标系统。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.script = self.root / "usr/share/libalpm/scripts/linxira-branding"
+        self.script.parent.mkdir(parents=True)
+        self.script.write_text("#!/bin/sh\n", encoding="utf-8")
+        self.os_release = self.root / "usr/lib/os-release"
+        self.os_release.parent.mkdir(parents=True)
+        self.os_release.write_text('NAME="Arch Linux"\n', encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_minimal_baseline_keeps_arch_branding(self):
+        with mock.patch.object(linxirapacstrap, "_run_with_retries") as run:
+            self.assertIsNone(linxirapacstrap._apply_branding(str(self.root), True))
+        run.assert_not_called()
+
+    def test_missing_hook_is_skipped(self):
+        self.script.unlink()
+        with mock.patch.object(linxirapacstrap, "_run_with_retries") as run:
+            self.assertIsNone(linxirapacstrap._apply_branding(str(self.root), False))
+        run.assert_not_called()
+
+    def test_runs_branding_script_in_target(self):
+        def fake(command, *_args, **_kwargs):
+            self.assertEqual(
+                command,
+                ["arch-chroot", str(self.root), "/usr/share/libalpm/scripts/linxira-branding"],
+            )
+            self.os_release.write_text('PRETTY_NAME="Linxira OS"\n', encoding="utf-8")
+            return None
+
+        with mock.patch.object(linxirapacstrap, "_run_with_retries", side_effect=fake):
+            self.assertIsNone(linxirapacstrap._apply_branding(str(self.root), False))
+
+    def test_fails_when_branding_did_not_apply(self):
+        with mock.patch.object(linxirapacstrap, "_run_with_retries", return_value=None):
+            error = linxirapacstrap._apply_branding(str(self.root), False)
+        self.assertEqual(error, "os-release branding did not apply")
