@@ -391,14 +391,25 @@ def _validate_minimal_system(root, bootloader, bootloader_package):
     return None
 
 
-def _ensure_efi_fallback(root):
+LOADER_PATHS = {
+    "grub": "EFI/linxira/grubx64.efi",
+    "systemd-boot": "EFI/systemd/systemd-bootx64.efi",
+    "refind": "EFI/refind/refind_x64.efi",
+}
+
+
+def _ensure_efi_fallback(root, bootloader="grub"):
     """独立 ESP 上补 \\EFI\\BOOT\\BOOTX64.EFI。
 
     UEFI 固件在 NVRAM 条目缺失时会回退到该路径; 但共用 Windows ESP 时它属于
     Windows, 不能覆盖。因此只在 ESP 上没有 Microsoft 引导文件时复制。
+    三种引导器各复制各自的 loader。
     """
+    relative = LOADER_PATHS.get(bootloader)
+    if not relative:
+        return False
     esp = Path(root) / "boot/efi"
-    loader = esp / "EFI/linxira/grubx64.efi"
+    loader = esp / relative
     fallback = esp / "EFI/BOOT/BOOTX64.EFI"
     windows = esp / "EFI/Microsoft/Boot/bootmgfw.efi"
     if not loader.is_file() or windows.exists() or fallback.exists():
@@ -416,7 +427,9 @@ def run():
         return "Target is not mounted", "The target root mount is unavailable."
 
     try:
-        _ensure_efi_fallback(root)
+        _ensure_efi_fallback(
+            root, libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
+        )
     except OSError as error:
         libcalamares.utils.warning(f"linxiravalidate: EFI fallback copy failed: {error}")
 
