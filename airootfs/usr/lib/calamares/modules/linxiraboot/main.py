@@ -29,7 +29,9 @@ GRUB_SETTINGS = [
     # 2026-10-26: 安装后保持与 ISO 一致的引导外观(不再是一片黑白纯文本)。
     ("GRUB_TERMINAL_OUTPUT", '"gfxterm"'),
     ("GRUB_TIMEOUT_STYLE", '"menu"'),
-    ("GRUB_THEME", '"/boot/grub/themes/linxira/theme.txt"'),
+    ("GRUB_THEME", '"/boot/grub/themes/linxira/theme-16x9-24.txt"'),
+    ("GRUB_GFXMODE", '"auto"'),
+    ("GRUB_GFXPAYLOAD_LINUX", '"keep"'),
     ("GRUB_BACKGROUND", '"/boot/grub/linxira-splash.png"'),
     ("GRUB_COLOR_NORMAL", '"light-gray/black"'),
     ("GRUB_COLOR_HIGHLIGHT", '"black/light-cyan"'),
@@ -162,10 +164,102 @@ def _install_grub_splash(root):
     shutil.copyfile(GRUB_SPLASH_SOURCE, target_share / "splash.png")
     if GRUB_THEME_SOURCE.is_dir():
         destination = target_boot / "themes/linxira"
-        destination.mkdir(parents=True, exist_ok=True)
-        for item in GRUB_THEME_SOURCE.iterdir():
-            if item.is_file():
-                shutil.copyfile(item, destination / item.name)
+        shutil.copytree(GRUB_THEME_SOURCE, destination, dirs_exist_ok=True)
+
+
+ESP_MOUNTPOINTS = ("/boot/efi", "/efi")
+WINDOWS_LOADER = "EFI/Microsoft/Boot/bootmgfw.efi"
+
+
+def _esp_identity(fstab_path):
+    """Return (mountpoint, uuid) of the EFI system partition from the target fstab."""
+    wanted = set(ESP_MOUNTPOINTS)
+    for line in fstab_path.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) < 3 or fields[0].startswith("#"):
+            continue
+        if fields[1] not in wanted:
+            continue
+        spec = fields[0]
+        if spec.startswith("UUID="):
+            return fields[1], spec[len("UUID="):]
+    return None
+
+
+def _write_windows_entry(root, grub_script_dir):
+    """确定性生成 Windows chainload 条目, 不依赖 os-prober。
+
+    os-prober 在 Calamares chroot 里会跳过“已挂载”的分区(目标 ESP 挂在
+    /tmp/calamares-root-*/boot/efi), 导致 Windows 条目时有时无。这里直接看
+    目标 ESP 里有没有 bootmgfw.efi, 有就按 ESP 的 UUID 生成固定条目。
+    """
+    fstab = root / "etc/fstab"
+    if not fstab.is_file():
+        return False
+    identity = _esp_identity(fstab)
+    if identity is None:
+        return False
+    mountpoint, uuid = identity
+    loader = root / mountpoint.lstrip("/") / WINDOWS_LOADER
+    if not loader.is_file():
+        return False
+    script = "\n".join(
+        [
+            "#!/bin/sh",
+            "exec tail -n +3 \"$0\"",
+            "menuentry 'Windows Boot Manager' --class windows --class os {",
+            "    insmod part_gpt",
+            "    insmod fat",
+            f"    search --no-floppy --fs-uuid --set=root {uuid}",
+            f"    chainloader /{WINDOWS_LOADER}",
+            "}",
+            "",
+        ]
+    )
+    grub_script_dir.mkdir(parents=True, exist_ok=True)
+    path = grub_script_dir / "42_linxira-windows"
+    path.write_text(script, encoding="utf-8")
+    os.chmod(path, 0o755)
+    return True
+
+
+THEME_SELECTOR = """#!/bin/sh
+exec tail -n +3 "$0"
+# 2026-10-26: 按实际分辨率选主题变体(原生分辨率, 不强制降分辨率)。
+theme_dir=/boot/grub/themes/linxira
+if loadfont "$theme_dir/fonts/linxira-ui-24.pf2" ; then
+    loadfont "$theme_dir/fonts/linxira-ui-32.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-40.pf2"
+    loadfont "$theme_dir/fonts/linxira-ui-48.pf2"
+    ui=24
+    if [ -n "$gfxheight" ]; then
+        if [ "$gfxheight" -gt 2400 ]; then
+            ui=48
+        elif [ "$gfxheight" -gt 1800 ]; then
+            ui=40
+        elif [ "$gfxheight" -gt 1200 ]; then
+            ui=32
+        fi
+    fi
+    aspect=16x9
+    if [ -n "$gfxwidth" ] && [ -n "$gfxheight" ]; then
+        if [ $((gfxwidth * 10)) -le $((gfxheight * 16)) ]; then
+            aspect=16x10
+        elif [ $((gfxwidth * 9)) -gt $((gfxheight * 21)) ]; then
+            aspect=21x9
+        fi
+    fi
+    set theme="$theme_dir/theme-${aspect}-${ui}.txt"
+fi
+"""
+
+
+def _write_theme_selector(root, grub_script_dir):
+    grub_script_dir.mkdir(parents=True, exist_ok=True)
+    path = grub_script_dir / "01_linxira_theme"
+    path.write_text(THEME_SELECTOR, encoding="utf-8")
+    os.chmod(path, 0o755)
+    return True
 
 
 def run():
@@ -189,6 +283,8 @@ def run():
         _append_mkinitcpio_hook(root / MKINITCPIO_TARGET)
         _copy_templates(root)
         _write_rescue_entry(root, root / "etc/grub.d")
+        _write_windows_entry(root, root / "etc/grub.d")
+        _write_theme_selector(root, root / "etc/grub.d")
     except (OSError, RuntimeError) as error:
         return "Boot and snapshot configuration failed", str(error)
 

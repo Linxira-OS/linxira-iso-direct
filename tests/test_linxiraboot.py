@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -22,12 +23,6 @@ spec.loader.exec_module(linxiraboot)
 
 
 class BootMenuTests(unittest.TestCase):
-    def test_theme_assets_match_between_iso_and_target(self):
-        iso_theme = PROFILE_ROOT / "grub/themes/linxira"
-        shipped = PROFILE_ROOT / "airootfs/usr/share/linxira/grub/themes/linxira"
-        for name in ("theme.txt", "background.png"):
-            self.assertEqual((iso_theme / name).read_bytes(), (shipped / name).read_bytes(), name)
-
     def test_target_ships_os_prober_so_grub_lists_windows(self):
         target = set((PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8").split())
         self.assertIn("os-prober", target)
@@ -37,7 +32,7 @@ class BootMenuTests(unittest.TestCase):
     def test_installed_grub_keeps_the_branded_menu(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TERMINAL_OUTPUT"], '"gfxterm"')
-        self.assertEqual(settings["GRUB_THEME"], '"/boot/grub/themes/linxira/theme.txt"')
+        self.assertEqual(settings["GRUB_THEME"], '"/boot/grub/themes/linxira/theme-16x9-24.txt"')
         self.assertEqual(settings["GRUB_BACKGROUND"], '"/boot/grub/linxira-splash.png"')
         self.assertIn("GRUB_COLOR_HIGHLIGHT", settings)
 
@@ -63,8 +58,9 @@ class BootMenuTests(unittest.TestCase):
             self.assertEqual((root / "boot/grub/linxira-splash.png").read_bytes(), source.read_bytes())
             self.assertEqual((root / "usr/share/linxira/grub/splash.png").read_bytes(), source.read_bytes())
             theme_dest = root / "boot/grub/themes/linxira"
-            self.assertTrue((theme_dest / "theme.txt").is_file())
-            self.assertTrue((theme_dest / "background.png").is_file())
+            self.assertTrue((theme_dest / "theme-16x9-24.txt").is_file())
+            self.assertTrue((theme_dest / "bg-16x9.png").is_file())
+            self.assertTrue((theme_dest / "fonts/linxira-ui-32.pf2").is_file())
 
 
     def test_grub_settings_pin_mainline_top_level(self):
@@ -108,3 +104,50 @@ class BootMenuTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class WindowsEntryTests(unittest.TestCase):
+    """Windows 条目由安装期确定性生成, 不依赖 chroot 里的 os-prober。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        (self.root / "etc").mkdir()
+        self.grub_d = self.root / "etc/grub.d"
+
+    def write_fstab(self, entry="UUID=1234-ABCD /boot/efi vfat umask=0077 0 2"):
+        (self.root / "etc/fstab").write_text(entry + "\n", encoding="utf-8")
+
+    def make_windows_loader(self, mount="boot/efi"):
+        loader = self.root / mount / "EFI/Microsoft/Boot/bootmgfw.efi"
+        loader.parent.mkdir(parents=True, exist_ok=True)
+        loader.write_bytes(b"MZ")
+
+    def test_entry_is_generated_when_bootmgfw_exists(self):
+        self.write_fstab()
+        self.make_windows_loader()
+        self.assertTrue(linxiraboot._write_windows_entry(self.root, self.grub_d))
+        script = (self.grub_d / "42_linxira-windows").read_text(encoding="utf-8")
+        self.assertIn("--class windows", script)
+        self.assertIn("--fs-uuid --set=root 1234-ABCD", script)
+        self.assertIn("chainloader /EFI/Microsoft/Boot/bootmgfw.efi", script)
+        if sys.platform.startswith("linux"):
+            self.assertTrue((self.grub_d / "42_linxira-windows").stat().st_mode & 0o111)
+
+    def test_efi_mountpoint_variant_is_supported(self):
+        self.write_fstab("UUID=9999-FFFF /efi vfat umask=0077 0 2")
+        self.make_windows_loader(mount="efi")
+        self.assertTrue(linxiraboot._write_windows_entry(self.root, self.grub_d))
+
+    def test_no_windows_loader_means_no_entry(self):
+        self.write_fstab()
+        self.assertFalse(linxiraboot._write_windows_entry(self.root, self.grub_d))
+        self.assertFalse((self.grub_d / "42_linxira-windows").exists())
+
+    def test_no_esp_in_fstab_means_no_entry(self):
+        self.write_fstab("UUID=root-uuid / btrfs subvol=/ 0 0")
+        self.make_windows_loader()
+        self.assertFalse(linxiraboot._write_windows_entry(self.root, self.grub_d))
+
+    def test_missing_fstab_is_tolerated(self):
+        self.assertFalse(linxiraboot._write_windows_entry(self.root, self.grub_d))

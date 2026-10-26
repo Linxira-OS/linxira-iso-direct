@@ -425,13 +425,11 @@ if ! cmp -s "${profile_copy}/grub/splash.png" \
   exit 1
 fi
 [[ -s "${profile_copy}/syslinux/splash.png" ]] || { printf '错误: 缺少 syslinux splash\n' >&2; exit 1; }
-for theme_file in theme.txt background.png; do
-  if ! cmp -s "${profile_copy}/grub/themes/linxira/$theme_file" \
-       "${profile_copy}/airootfs/usr/share/linxira/grub/themes/linxira/$theme_file"; then
-    printf '错误: GRUB 主题 %s 在 ISO 与安装源之间不一致\n' "$theme_file" >&2
-    exit 1
-  fi
-done
+if ! diff -r -q "${profile_copy}/grub/themes/linxira" \
+     "${profile_copy}/airootfs/usr/share/linxira/grub/themes/linxira" >/dev/null; then
+  printf '错误: GRUB 主题资源在 ISO 与安装源之间不一致\n' >&2
+  exit 1
+fi
 
 # 发布证据依赖(2026-10-24): 生成器与镜像版本写入 profile, 由 customize_airootfs.sh 调用
 notices_src="${profile_dir}/../packages/scripts/generate-notices.py"
