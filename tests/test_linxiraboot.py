@@ -22,6 +22,12 @@ spec.loader.exec_module(linxiraboot)
 
 
 class BootMenuTests(unittest.TestCase):
+    def test_theme_assets_match_between_iso_and_target(self):
+        iso_theme = PROFILE_ROOT / "grub/themes/linxira"
+        shipped = PROFILE_ROOT / "airootfs/usr/share/linxira/grub/themes/linxira"
+        for name in ("theme.txt", "background.png"):
+            self.assertEqual((iso_theme / name).read_bytes(), (shipped / name).read_bytes(), name)
+
     def test_target_ships_os_prober_so_grub_lists_windows(self):
         target = set((PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8").split())
         self.assertIn("os-prober", target)
@@ -31,6 +37,7 @@ class BootMenuTests(unittest.TestCase):
     def test_installed_grub_keeps_the_branded_menu(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TERMINAL_OUTPUT"], '"gfxterm"')
+        self.assertEqual(settings["GRUB_THEME"], '"/boot/grub/themes/linxira/theme.txt"')
         self.assertEqual(settings["GRUB_BACKGROUND"], '"/boot/grub/linxira-splash.png"')
         self.assertIn("GRUB_COLOR_HIGHLIGHT", settings)
 
@@ -45,13 +52,19 @@ class BootMenuTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             original = linxiraboot.GRUB_SPLASH_SOURCE
+            original_theme = linxiraboot.GRUB_THEME_SOURCE
             linxiraboot.GRUB_SPLASH_SOURCE = source
+            linxiraboot.GRUB_THEME_SOURCE = PROFILE_ROOT / "airootfs/usr/share/linxira/grub/themes/linxira"
             try:
                 linxiraboot._install_grub_splash(root)
             finally:
                 linxiraboot.GRUB_SPLASH_SOURCE = original
+                linxiraboot.GRUB_THEME_SOURCE = original_theme
             self.assertEqual((root / "boot/grub/linxira-splash.png").read_bytes(), source.read_bytes())
             self.assertEqual((root / "usr/share/linxira/grub/splash.png").read_bytes(), source.read_bytes())
+            theme_dest = root / "boot/grub/themes/linxira"
+            self.assertTrue((theme_dest / "theme.txt").is_file())
+            self.assertTrue((theme_dest / "background.png").is_file())
 
 
     def test_grub_settings_pin_mainline_top_level(self):

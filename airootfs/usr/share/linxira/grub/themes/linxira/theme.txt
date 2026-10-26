@@ -1,0 +1,41 @@
+# Linxira OS GRUB theme — 深墨底 + 青绿强调。
+# 背景图里已经烘焙了半透明菜单面板，因此不依赖 pixmap 九宫格资源；
+# 选中项用青绿高亮，未选中项为浅灰。
+
+desktop-image: "background.png"
+desktop-color: "#0E1417"
+title-text: ""
+
++ boot_menu {
+    left = 8%
+    top = 26%
+    width = 36%
+    height = 46%
+    item_font = "Unifont Regular 16"
+    item_color = "#C7D2DA"
+    selected_item_color = "#20B8B0"
+    item_height = 40
+    item_padding = 8
+    item_spacing = 4
+    icon_width = 0
+    icon_height = 0
+    scrollbar = false
+}
+
++ label {
+    left = 8%
+    top = 76%
+    width = 36%
+    align = "left"
+    font = "Unifont Regular 16"
+    color = "#64748B"
+    text = "↑/↓ 选择    Enter 启动    e 编辑"
+}
+
++ timeout_label {
+    left = 8%
+    top = 80%
+    align = "left"
+    font = "Unifont Regular 16"
+    color = "#64748B"
+}

@@ -29,6 +29,7 @@ GRUB_SETTINGS = [
     # 2026-10-26: 安装后保持与 ISO 一致的引导外观(不再是一片黑白纯文本)。
     ("GRUB_TERMINAL_OUTPUT", '"gfxterm"'),
     ("GRUB_TIMEOUT_STYLE", '"menu"'),
+    ("GRUB_THEME", '"/boot/grub/themes/linxira/theme.txt"'),
     ("GRUB_BACKGROUND", '"/boot/grub/linxira-splash.png"'),
     ("GRUB_COLOR_NORMAL", '"light-gray/black"'),
     ("GRUB_COLOR_HIGHLIGHT", '"black/light-cyan"'),
@@ -143,6 +144,7 @@ def _write_rescue_entry(root, grub_script_dir):
 
 
 GRUB_SPLASH_SOURCE = Path("/usr/share/linxira/grub/splash.png")
+GRUB_THEME_SOURCE = Path("/usr/share/linxira/grub/themes/linxira")
 
 
 def _install_grub_splash(root):
@@ -158,6 +160,12 @@ def _install_grub_splash(root):
     target_share = root / "usr/share/linxira/grub"
     target_share.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(GRUB_SPLASH_SOURCE, target_share / "splash.png")
+    if GRUB_THEME_SOURCE.is_dir():
+        destination = target_boot / "themes/linxira"
+        destination.mkdir(parents=True, exist_ok=True)
+        for item in GRUB_THEME_SOURCE.iterdir():
+            if item.is_file():
+                shutil.copyfile(item, destination / item.name)
 
 
 def run():
