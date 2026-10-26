@@ -251,7 +251,8 @@ plymouth_theme_directory=$(realpath "$plymouth_theme_directory")
 validate_package_artifact "$shelly_package" shelly
 validate_package_artifact "$calamares_package" calamares \
   usr/lib/calamares/modules/linxirasoftware/libcalamares_viewmodule_linxirasoftware.so \
-  usr/lib/calamares/modules/linxirasoftware/module.desc
+  usr/lib/calamares/modules/linxirasoftware/module.desc \
+  etc/calamares/qml
 if bsdtar -tf "$calamares_package" | grep -Fxq 'usr/share/applications/calamares.desktop'; then
   printf 'The Calamares artifact exposes an unguarded duplicate installer launcher.\n' >&2
   exit 1
@@ -387,6 +388,30 @@ cleanup() {
 trap cleanup EXIT
 
 cp -a "${profile_dir}/." "$profile_copy/"
+
+# 2026-10-26: 安装器 134(SIGABRT) 构建期门禁。启动器必须注入会话环境并自愈 qml,
+# 且不得存在绕过启动器直接 exec calamares 的路径 —— 否则构建直接失败。
+installer_shell="${profile_copy}/airootfs/usr/local/bin/linxira-installer-shell"
+if [[ ! -x "$installer_shell" ]]; then
+  printf '错误: 安装器启动器缺失或不可执行: %s\n' "$installer_shell" >&2
+  exit 1
+fi
+for needle in 'QT_QPA_PLATFORM' 'WAYLAND_DISPLAY' 'XDG_SESSION_TYPE' 'wayland-*' 'qml'; do
+  if ! grep -Fq "$needle" "$installer_shell"; then
+    printf '错误: 启动器缺少 %s 注入/自愈逻辑 (134 回归)\n' "$needle" >&2
+    exit 1
+  fi
+done
+if ! grep -Fq 'L+ /etc/calamares/qml' "${profile_copy}/airootfs/usr/lib/tmpfiles.d/linxira-live-tmpfiles.conf"; then
+  printf '错误: tmpfiles 未提供 calamares qml 兜底\n' >&2
+  exit 1
+fi
+bypass=$(grep -rIlE '(^|[[:space:]])(exec[[:space:]]+)?/usr/bin/calamares([[:space:]]|$)' \
+  "${profile_copy}/airootfs" 2>/dev/null | grep -v '/linxira-installer-shell$' || true)
+if [[ -n "$bypass" ]]; then
+  printf '错误: 存在绕过启动器直接启动 calamares 的路径:\n%s\n' "$bypass" >&2
+  exit 1
+fi
 
 # 发布证据依赖(2026-10-24): 生成器与镜像版本写入 profile, 由 customize_airootfs.sh 调用
 notices_src="${profile_dir}/../packages/scripts/generate-notices.py"

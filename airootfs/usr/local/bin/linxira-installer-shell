@@ -11,6 +11,11 @@ fi
 log=/tmp/linxira-installer.log
 : >"$log"
 
+installer_user=${LINXIRA_INSTALLER_USER:-installer}
+calamares_bin=${LINXIRA_CALAMARES:-/usr/bin/calamares}
+app_data=${LINXIRA_APP_DATA:-/etc/calamares}
+qml_target=${LINXIRA_QML_TARGET:-/usr/share/calamares/qml}
+
 # 2026-08-13: 语言联动 —— welcome 选择的语言(LANG 格式)优先于 live 系统 locale。
 # pkexec 保留 LANG/LC_* 环境变量, calamares welcome 页即以此语言启动。
 if [ -f /tmp/linxira-installer-lang ]; then
@@ -20,16 +25,48 @@ if [ -f /tmp/linxira-installer-lang ]; then
   esac
 fi
 
+# 2026-09-30: pkexec 剥离会话环境 —— Calamares 落进「有 XDG_RUNTIME_DIR 但
+# 没有 wayland socket」的组合时 Qt wayland 插件直接 abort(SIGABRT=134)。
+# 2026-10-26: 不再写死 wayland —— 先从真实运行目录里找合成器 socket; 找不到
+# 就退回 X11(xcb), 并把 XDG_SESSION_TYPE/XDG_CURRENT_DESKTOP 一并注入。
+uid=$(id -u "$installer_user")
+runtime_dir=${LINXIRA_RUNTIME_DIR:-/run/user/$uid}
+
+# 2026-10-26: Calamares 要求 appData 下存在 qml/(缺失即 initQmlModulesDir FATAL,
+# 启动 SIGABRT 134)。包内已提供符号链接; 这里再兜一次, 不依赖开机 tmpfiles 时序。
+if [ -d "$qml_target" ] && [ ! -e "$app_data/qml" ]; then
+  mkdir -p "$app_data"
+  ln -sfn "$qml_target" "$app_data/qml" 2>/dev/null || true
+fi
+
+display_platform=xcb
+wayland_socket=''
+if [ -d "$runtime_dir" ]; then
+  wayland_socket=$(ls -1 "$runtime_dir"/wayland-* 2>/dev/null | head -n 1) || true
+fi
+if [ -n "$wayland_socket" ]; then
+  display_platform=wayland
+  wayland_socket=${wayland_socket##*/}
+fi
+x11_display=${DISPLAY:-:0}
+
 set +e
 # 2026-09-28: 启动即清理上次失败安装的现场(目标挂载点占用会让分区页整体
 # 不可操作, 连下一步都进不去 —— 必须在任何页面渲染之前清)。与 calamares
 # 同一次 pkexec, 不产生额外授权弹窗; 清理失败不阻断安装。
-# sh 直调 + 静默: 即便 overlay 权限丢失也只静默跳过, 不污染诊断日志
-#
-# 2026-09-30: pkexec 剥离会话环境 —— Calamares 落进「有 XDG_RUNTIME_DIR 但
-# 没有 wayland socket」的组合时 Qt wayland 插件直接 abort(SIGABRT=134,
-# calamares --version 都崩)。显式注入 installer 会话凭据后再启动。
-pkexec /bin/sh -c 'export XDG_RUNTIME_DIR=/run/user/$(id -u installer) WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0} QT_QPA_PLATFORM=wayland; sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares' >>"$log" 2>&1
+pkexec /bin/sh -c '
+  export XDG_RUNTIME_DIR="$1"
+  export QT_QPA_PLATFORM="$2"
+  export XDG_SESSION_TYPE="$3"
+  export XDG_CURRENT_DESKTOP="${4:-KDE}"
+  [ -n "$5" ] && export WAYLAND_DISPLAY="$5"
+  [ -n "$6" ] && export DISPLAY="$6"
+  sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true
+  exec "$7"
+' sh "$runtime_dir" "$display_platform" \
+  "$([ "$display_platform" = wayland ] && printf wayland || printf x11)" \
+  "${XDG_CURRENT_DESKTOP:-KDE}" "$wayland_socket" "$x11_display" \
+  "$calamares_bin" >>"$log" 2>&1
 status=$?
 set -e
 
@@ -43,9 +80,11 @@ if (( status != 0 )); then
   notify-send -u critical -a "Linxira Installer" \
     "安装器异常退出（status $status）" \
     "正在自动收集并上传诊断报告…" 2>/dev/null || true
-  link=$(linxira-config logs collect >/dev/null 2>&1 && linxira-config logs upload 2>/dev/null | grep -aoE 'https?://[^[:space:]]+' | tail -n 1)
+  link=$( (linxira-config logs collect >/dev/null 2>&1 && linxira-config logs upload 2>/dev/null | grep -aoE 'https?://[^[:space:]]+' | tail -n 1) || true )
   {
     printf '\n=== 诊断报告 ===\n'
+    printf '回退注入: platform=%s wayland_display=%s display=%s runtime=%s\n' \
+      "$display_platform" "$wayland_socket" "$x11_display" "$runtime_dir"
     if [ -n "$link" ]; then
       printf '报告链接(任意设备可打开): %s\n' "$link"
     else

@@ -197,7 +197,8 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("logs collect", script)
         self.assertIn("logs upload", script)
         # 2026-09-28: pkexec 内先清理失败现场再 exec calamares
-        self.assertIn("sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true; exec /usr/bin/calamares", script)
+        self.assertIn("sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true", script)
+        self.assertIn('exec "$7"', script)
         self.assertIn("lock=/tmp/linxira-installer.lock", script)
         self.assertIn("flock -n 9", script)
         self.assertIn("status == 87", script)
@@ -205,8 +206,12 @@ class LiveSessionTests(unittest.TestCase):
         self.assertIn("if (( status != 0 ))", script)
         # 2026-09-30: pkexec 剥离会话环境 -> Qt wayland abort(134);
         # 必须显式注入 installer 会话凭据
-        self.assertIn("XDG_RUNTIME_DIR=/run/user/$(id -u installer)", script)
-        self.assertIn("QT_QPA_PLATFORM=wayland", script)
+        self.assertIn('export XDG_RUNTIME_DIR="$1"', script)
+        self.assertIn('runtime_dir=${LINXIRA_RUNTIME_DIR:-/run/user/$uid}', script)
+        self.assertIn('export QT_QPA_PLATFORM="$2"', script)
+        # 2026-10-26: 不再写死 wayland —— 有合成器 socket 才用 wayland, 否则回退 xcb
+        self.assertIn('wayland_socket=$(ls -1 "$runtime_dir"/wayland-*', script)
+        self.assertIn("display_platform=xcb", script)
 
     def test_installer_metadata_owns_its_maintenance_links(self):
         root = ET.parse(INSTALLER_METAINFO).getroot()

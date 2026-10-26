@@ -22,10 +22,10 @@ class InstallRetryCleanupTests(unittest.TestCase):
     def test_launcher_cleans_before_calamares_starts(self):
         script = LAUNCHER.read_text(encoding="utf-8")
         cleanup_at = script.index("linxira-install-cleanup")
-        calamares_at = script.index("/usr/bin/calamares")
+        calamares_at = script.index('exec "$7"')
         self.assertLess(cleanup_at, calamares_at)
         # 同一次 pkexec 内先清理后 exec, 不产生额外授权弹窗
-        self.assertIn("exec /usr/bin/calamares", script)
+        self.assertIn('exec "$7"', script)
         # 清理失败不阻断安装
         self.assertIn("sh /usr/local/bin/linxira-install-cleanup 2>/dev/null || true", script)
 
