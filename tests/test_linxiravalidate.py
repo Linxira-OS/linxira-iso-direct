@@ -57,8 +57,7 @@ class InstalledSystemValidationTests(unittest.TestCase):
             '"/usr/bin/linxira-recovery-diagnostics"',
             '"/usr/bin/linxira-components-service"',
             '"/usr/lib/systemd/system/linxira-components.service"',
-            '"linxira-components": "0.8.2-1"',
-            '"linxira-hardware-driver-manager": "0.4.0-3"',
+            'EXPECTED_VERSIONS_PATH',
             '"/usr/bin/linxira-components-worker"',
             '"/usr/lib/systemd/system/linxira-components-worker@.service"',
             '"/usr/bin/linxira-update"',
@@ -355,6 +354,11 @@ class InstalledSystemValidationTests(unittest.TestCase):
                         linxiravalidate,
                         "_package_version",
                         side_effect=lambda root, package: versions[package],
+                    ), \
+                    mock.patch.object(
+                        linxiravalidate,
+                        "_expected_versions",
+                        return_value=versions,
                     ):
                 return linxiravalidate.run()
 

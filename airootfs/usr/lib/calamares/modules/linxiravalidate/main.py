@@ -222,6 +222,23 @@ def _package_or_group_installed(root, target):
     )
 
 
+EXPECTED_VERSIONS_PATH = "/etc/linxira/expected-versions"
+
+
+def _expected_versions():
+    """读取构建期生成的 包名 -> 版本 映射(行格式: 'name version')。"""
+    versions = {}
+    try:
+        with open(EXPECTED_VERSIONS_PATH, encoding="utf-8") as handle:
+            for line in handle:
+                name, _, version = line.partition(" ")
+                if name and version.strip():
+                    versions[name.strip()] = version.strip()
+    except OSError:
+        return versions
+    return versions
+
+
 def _package_version(root, package):
     result = subprocess.run(
         ["arch-chroot", root, "pacman", "-Q", package],
@@ -409,12 +426,15 @@ def run():
     for package in selected_packages:
         if not _package_or_group_installed(root, package):
             failures.append("missing selected package or group: " + package)
-    required_versions = {
-        "linxira-hwd-detector": "1.23.0-2",
-        "linxira-components": "0.8.2-1",
-        "linxira-hardware-driver-manager": "0.4.0-3",
-    }
-    for package, version in required_versions.items():
+    # 2026-10-26: 期望版本由构建期写入 /etc/linxira/expected-versions(取自各产物
+    # 的 pacman -Qp), 不在模块里写死 —— 否则每次发版都会漂移成安装失败。
+    pinned = ("linxira-hwd-detector", "linxira-components", "linxira-hardware-driver-manager")
+    expected_versions = _expected_versions()
+    for package in pinned:
+        version = expected_versions.get(package)
+        if version is None:
+            failures.append("missing expected version entry: " + package)
+            continue
         installed = _package_version(root, package)
         if installed is None:
             failures.append("could not verify package version: " + package)

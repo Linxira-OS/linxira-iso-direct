@@ -479,6 +479,17 @@ for artifact in "${package_artifacts[@]}"; do
 done
 repo-add "${repo_dir}/linxira-local.db.tar.zst" "${repo_artifacts[@]}"
 
+# 2026-10-26: 安装器校验所需的期望版本由构建期生成(取自产物), 模块里不再写死,
+# 避免发版后 "unexpected package version" 让安装失败。
+expected_versions="${profile_copy}/airootfs/etc/linxira/expected-versions"
+install -d "$(dirname "$expected_versions")"
+: > "$expected_versions"
+for artifact in "${package_artifacts[@]}"; do
+  read -r artifact_name artifact_version < <(pacman -Qp "$artifact")
+  printf '%s %s\n' "$artifact_name" "$artifact_version" >> "$expected_versions"
+done
+[[ -s "$expected_versions" ]] || { printf '错误: 期望版本文件为空\n' >&2; exit 1; }
+
 sed -i "s|@LINXIRA_LOCAL_REPO@|${profile_copy}/linxira-local-repo|g" "${profile_copy}/pacman.conf"
 if grep -q '@LINXIRA_LOCAL_REPO@' "${profile_copy}/pacman.conf"; then
   printf 'Could not configure the temporary Linxira build repository.\n' >&2
