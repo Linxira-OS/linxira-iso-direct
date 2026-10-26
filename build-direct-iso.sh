@@ -523,6 +523,11 @@ cp -a "${plymouth_theme_directory}/." "$theme_target/"
 sed -i 's/\r$//' "$theme_target/linxira.plymouth"
 
 mapfile -t target_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$target_manifest")
+# 2026-10-26: 双系统 —— GRUB 需要 os-prober 才会列出 Windows; 缺失则构建失败。
+if ! printf '%s\n' "${target_packages[@]}" | grep -qx 'os-prober'; then
+  printf '错误: 目标清单缺少 os-prober(安装后 GRUB 不会列出 Windows)\n' >&2
+  exit 1
+fi
 mapfile -t candidate_packages < <(grep -v -E '^[[:space:]]*(#|$)' "$candidate_manifest")
 # 2026-08-12 产品决策: 桌面包从无条件 baseline 拆出, 改为 catalog 选择驱动。
 # candidate 现为 Plasma(默认)+ COSMIC(第二个一等桌面, 2026-09-20)桌面包合集,

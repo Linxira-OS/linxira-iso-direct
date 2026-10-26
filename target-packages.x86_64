@@ -9,6 +9,7 @@ fastfetch
 firefox
 fwupd
 grub
+os-prober
 grub-btrfs
 git
 inotify-tools

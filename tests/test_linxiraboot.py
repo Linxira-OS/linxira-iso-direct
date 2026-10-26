@@ -22,6 +22,12 @@ spec.loader.exec_module(linxiraboot)
 
 
 class BootMenuTests(unittest.TestCase):
+    def test_target_ships_os_prober_so_grub_lists_windows(self):
+        target = set((PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8").split())
+        self.assertIn("os-prober", target)
+        settings = dict(linxiraboot.GRUB_SETTINGS)
+        self.assertEqual(settings["GRUB_DISABLE_OS_PROBER"], "false")
+
     def test_installed_grub_keeps_the_branded_menu(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TERMINAL_OUTPUT"], '"gfxterm"')
