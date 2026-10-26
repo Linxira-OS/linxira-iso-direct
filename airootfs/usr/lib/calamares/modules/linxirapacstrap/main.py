@@ -772,6 +772,7 @@ _TARGET_REPOS = (
     (
         "[linxira-zeta]\n"
         "SigLevel = Required DatabaseOptional\n"
+        "Server = https://linxira-os.github.io/linxira-packages/zeta/$arch\n"
         "Server = https://github.com/Linxira-OS/packages/releases/download/zeta-repo"
     ),
 )

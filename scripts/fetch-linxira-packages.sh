@@ -18,9 +18,11 @@ usage() {
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 profile_dir=$(cd -- "$script_dir/.." && pwd)
 repo_url=${LINXIRA_REPO_URL:-https://linxira-os.github.io/linxira-packages}
-# 附加仓: Zeta 套件(体量超过主仓单文件上限, 独立索引; 段名 linxira-zeta)
-zeta_repo_url=${LINXIRA_ZETA_REPO_URL:-https://github.com/Linxira-OS/packages/releases/download/zeta-repo}
 arch=${LINXIRA_ARCH:-x86_64}
+# 附加仓: Zeta 套件(体量超过主仓单文件上限, 独立索引; 段名 linxira-zeta)
+# 首选与主仓同域的 Pages(国内可达), Release 作为回退。
+zeta_repo_url=${LINXIRA_ZETA_REPO_URL:-https://linxira-os.github.io/linxira-packages/zeta/$arch}
+zeta_repo_fallback=${LINXIRA_ZETA_REPO_FALLBACK:-https://github.com/Linxira-OS/packages/releases/download/zeta-repo}
 output_dir="${profile_dir}/.linxira-packages"
 
 default_packages=(
@@ -116,8 +118,16 @@ parse_db() { # <解包目录> <下载基地址>
 parse_db "$tmpdir" "${repo}/${arch}"
 
 # 附加仓索引(缺省不致命: 只有请求 zeta 包时才需要)
-printf 'Downloading %s ...\n' "${zeta_repo_url%/}/linxira-zeta.db.tar.zst" >&2
-if curl -fsSL "${zeta_repo_url%/}/linxira-zeta.db.tar.zst" -o "$tmpdir/zeta.db.tar.zst" 2>/dev/null; then
+zeta_db_ok=0
+for base in "$zeta_repo_url" "$zeta_repo_fallback"; do
+  printf 'Downloading %s ...\n' "${base%/}/linxira-zeta.db.tar.zst" >&2
+  if curl -fsSL "${base%/}/linxira-zeta.db.tar.zst" -o "$tmpdir/zeta.db.tar.zst" 2>/dev/null; then
+    zeta_repo_url=$base
+    zeta_db_ok=1
+    break
+  fi
+done
+if (( zeta_db_ok )); then
   mkdir -p "$tmpdir/zeta-db"
   if bsdtar -xf "$tmpdir/zeta.db.tar.zst" -C "$tmpdir/zeta-db" 2>/dev/null; then
     parse_db "$tmpdir/zeta-db" "${zeta_repo_url%/}"
