@@ -418,6 +418,14 @@ if [[ -n "$bypass" ]]; then
   exit 1
 fi
 
+# 2026-10-26: 引导外观一致性 —— ISO 菜单与安装后菜单必须用同一张品牌 splash。
+if ! cmp -s "${profile_copy}/grub/splash.png" \
+     "${profile_copy}/airootfs/usr/share/linxira/grub/splash.png"; then
+  printf '错误: grub/splash.png 与镜像内期望的 splash 不一致\n' >&2
+  exit 1
+fi
+[[ -s "${profile_copy}/syslinux/splash.png" ]] || { printf '错误: 缺少 syslinux splash\n' >&2; exit 1; }
+
 # 发布证据依赖(2026-10-24): 生成器与镜像版本写入 profile, 由 customize_airootfs.sh 调用
 notices_src="${profile_dir}/../packages/scripts/generate-notices.py"
 [[ -r "$notices_src" ]] || { echo "错误: 缺少 $notices_src" >&2; exit 1; }

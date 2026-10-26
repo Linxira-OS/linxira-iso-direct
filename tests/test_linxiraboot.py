@@ -22,6 +22,32 @@ spec.loader.exec_module(linxiraboot)
 
 
 class BootMenuTests(unittest.TestCase):
+    def test_installed_grub_keeps_the_branded_menu(self):
+        settings = dict(linxiraboot.GRUB_SETTINGS)
+        self.assertEqual(settings["GRUB_TERMINAL_OUTPUT"], '"gfxterm"')
+        self.assertEqual(settings["GRUB_BACKGROUND"], '"/boot/grub/linxira-splash.png"')
+        self.assertIn("GRUB_COLOR_HIGHLIGHT", settings)
+
+    def test_grub_splash_is_copied_into_the_target(self):
+        source = PROFILE_ROOT / "airootfs/usr/share/linxira/grub/splash.png"
+        self.assertTrue(source.is_file(), "live image must ship the GRUB splash")
+        self.assertEqual(
+            source.read_bytes(),
+            (PROFILE_ROOT / "grub/splash.png").read_bytes(),
+            "ISO menu and installed menu must use the same splash",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = linxiraboot.GRUB_SPLASH_SOURCE
+            linxiraboot.GRUB_SPLASH_SOURCE = source
+            try:
+                linxiraboot._install_grub_splash(root)
+            finally:
+                linxiraboot.GRUB_SPLASH_SOURCE = original
+            self.assertEqual((root / "boot/grub/linxira-splash.png").read_bytes(), source.read_bytes())
+            self.assertEqual((root / "usr/share/linxira/grub/splash.png").read_bytes(), source.read_bytes())
+
+
     def test_grub_settings_pin_mainline_top_level(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TOP_LEVEL"], '"/boot/vmlinuz-linux"')

@@ -26,6 +26,12 @@ GRUB_SETTINGS = [
     ("GRUB_DISABLE_RECOVERY", "true"),
     ("GRUB_DISABLE_OS_PROBER", "false"),
     ("GRUB_CMDLINE_LINUX_DEFAULT", '"quiet splash nowatchdog nvme_load=YES"'),
+    # 2026-10-26: 安装后保持与 ISO 一致的引导外观(不再是一片黑白纯文本)。
+    ("GRUB_TERMINAL_OUTPUT", '"gfxterm"'),
+    ("GRUB_TIMEOUT_STYLE", '"menu"'),
+    ("GRUB_BACKGROUND", '"/boot/grub/linxira-splash.png"'),
+    ("GRUB_COLOR_NORMAL", '"light-gray/black"'),
+    ("GRUB_COLOR_HIGHLIGHT", '"black/light-cyan"'),
 ]
 
 # 快照菜单: timeshift 后端 + 菜单条目上限 + 日期与描述
@@ -136,6 +142,24 @@ def _write_rescue_entry(root, grub_script_dir):
     return True
 
 
+GRUB_SPLASH_SOURCE = Path("/usr/share/linxira/grub/splash.png")
+
+
+def _install_grub_splash(root):
+    """复制引导背景到目标 /boot/grub, 并留一份在 /usr/share/linxira/grub。
+
+    grub-mkconfig(由 bootloader 模块随后执行)会按 GRUB_BACKGROUND 引用它。
+    """
+    if not GRUB_SPLASH_SOURCE.is_file():
+        raise RuntimeError(f"GRUB splash image missing: {GRUB_SPLASH_SOURCE}")
+    target_boot = root / "boot/grub"
+    target_boot.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(GRUB_SPLASH_SOURCE, target_boot / "linxira-splash.png")
+    target_share = root / "usr/share/linxira/grub"
+    target_share.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(GRUB_SPLASH_SOURCE, target_share / "splash.png")
+
+
 def run():
     root_value = libcalamares.globalstorage.value("rootMountPoint")
     if not root_value or not os.path.ismount(root_value):
@@ -153,6 +177,7 @@ def run():
         for key, value in GRUB_BTRFS_SETTINGS:
             _set_config_value(grub_btrfs_path, key, value)
 
+        _install_grub_splash(root)
         _append_mkinitcpio_hook(root / MKINITCPIO_TARGET)
         _copy_templates(root)
         _write_rescue_entry(root, root / "etc/grub.d")
