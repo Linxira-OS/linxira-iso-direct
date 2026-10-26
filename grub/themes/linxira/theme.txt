@@ -32,10 +32,12 @@ title-text: ""
     text = "↑/↓ 选择    Enter 启动    e 编辑"
 }
 
-+ timeout_label {
++ label {
+    id = "__timeout__"
     left = 8%
     top = 80%
     align = "left"
     font = "Unifont Regular 16"
     color = "#64748B"
+    text = "%d"
 }
