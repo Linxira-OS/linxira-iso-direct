@@ -885,6 +885,7 @@ class BrandingTests(unittest.TestCase):
             return None
 
         with mock.patch.object(linxirapacstrap, "_normalize_os_release"), \
+             mock.patch.object(linxirapacstrap, "_repair_branded_os_release"), \
              mock.patch.object(linxirapacstrap, "_run_with_retries", side_effect=fake):
             self.assertIsNone(linxirapacstrap._apply_branding(str(self.root), False))
 
@@ -911,3 +912,14 @@ class BrandingTests(unittest.TestCase):
              mock.patch.object(Path, "symlink_to") as symlink:
             linxirapacstrap._normalize_os_release(str(self.root))
         symlink.assert_not_called()
+
+
+    def test_repair_moves_branded_etc_into_real_file(self):
+        etc = self.root / "etc/os-release"
+        etc.parent.mkdir(parents=True)
+        etc.write_text('PRETTY_NAME="Linxira OS"\n', encoding="utf-8")
+        with mock.patch.object(Path, "symlink_to") as symlink:
+            linxirapacstrap._repair_branded_os_release(str(self.root))
+        self.assertIn('PRETTY_NAME="Linxira OS"', self.os_release.read_text(encoding="utf-8"))
+        self.assertFalse(etc.exists())
+        symlink.assert_called_once_with("../usr/lib/os-release")

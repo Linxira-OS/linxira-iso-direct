@@ -814,6 +814,30 @@ def _normalize_os_release(root):
         etc_release.symlink_to("../usr/lib/os-release")
 
 
+def _repair_branded_os_release(root):
+    """sed -i 会把 /etc/os-release 符号链接替换成普通文件, 真实文件仍是 Arch。
+
+    品牌脚本成功后, 若 /usr/lib/os-release 未变而 /etc/os-release 已品牌化,
+    把内容回写真实文件并恢复符号链接。
+    """
+    marker = 'PRETTY_NAME="Linxira OS"'
+    etc_release = Path(root) / "etc/os-release"
+    lib_release = Path(root) / "usr/lib/os-release"
+    if lib_release.is_file() and marker in lib_release.read_text(encoding="utf-8"):
+        branded = lib_release
+    elif etc_release.is_file() and marker in etc_release.read_text(encoding="utf-8"):
+        lib_release.parent.mkdir(parents=True, exist_ok=True)
+        lib_release.write_bytes(etc_release.read_bytes())
+        branded = lib_release
+    else:
+        return
+    if not etc_release.is_symlink():
+        if etc_release.exists():
+            etc_release.unlink()
+        etc_release.parent.mkdir(parents=True, exist_ok=True)
+        etc_release.symlink_to("../usr/lib/os-release")
+
+
 def _apply_branding(root, minimal_baseline):
     """Apply Linxira OS branding in the target.
 
@@ -833,6 +857,7 @@ def _apply_branding(root, minimal_baseline):
     )
     if error:
         return error
+    _repair_branded_os_release(root)
     os_release = Path(root) / "usr/lib/os-release"
     if os_release.is_file() and 'PRETTY_NAME="Linxira OS"' not in os_release.read_text(
         encoding="utf-8"
