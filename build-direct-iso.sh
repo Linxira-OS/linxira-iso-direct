@@ -561,12 +561,15 @@ for fetched in "${profile_dir}"/.linxira-packages/*.pkg.tar.zst; do
 done
 pacman_db=$(mktemp -d "${build_parent}/.linxira-pacman-db.XXXXXX")
 mkdir -p "$offline_repo" "${pacman_db}/local"
+# 2026-10-27: pacman 在 downloadonly 阶段仍可能对已缓存包/镜像切换发起交互确认
+# (实际事故: qt6-webengine 95MB 下载时卡在 "Enter a number" 提示, 构建永久挂起)。
+# 镜像列表取前三, 并对每一步给超时, 失败即失败, 不静默等待。
 printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox \
   --config "${profile_copy}/pacman.conf" \
   --dbpath "$pacman_db" \
   --cachedir "$package_cache" \
   --logfile /dev/null \
-  --sync --refresh --downloadonly --noconfirm --needed \
+  --sync --refresh --downloadonly --noconfirm --needed --disable-download-timeout \
   "${target_packages[@]}"
 
 # B7: 只把 pacman 解析出的目标闭包拷入离线仓库, 避免把 cache 里历史版本或
