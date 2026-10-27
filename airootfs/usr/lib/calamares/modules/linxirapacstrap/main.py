@@ -793,6 +793,27 @@ def _enable_target_linxira_repo(root):
     config_path.write_text(contents, encoding="utf-8")
 
 
+def _normalize_os_release(root):
+    """Make /etc/os-release a symlink to /usr/lib/os-release.
+
+    pacstrap 的目标里 /etc/os-release 可能缺失; 品牌脚本写 /etc/os-release,
+    于是 /usr/lib/os-release 保持 Arch 原文, 安装器断言失败(实际事故:
+    2026.10.27 ISO 在最后一步报 "os-release branding did not apply")。
+    """
+    etc_release = Path(root) / "etc/os-release"
+    lib_release = Path(root) / "usr/lib/os-release"
+    if etc_release.is_symlink():
+        return
+    if etc_release.is_file() and not lib_release.is_file():
+        lib_release.parent.mkdir(parents=True, exist_ok=True)
+        lib_release.write_bytes(etc_release.read_bytes())
+    if etc_release.exists() or etc_release.is_symlink():
+        etc_release.unlink()
+    if lib_release.is_file():
+        etc_release.parent.mkdir(parents=True, exist_ok=True)
+        etc_release.symlink_to("../usr/lib/os-release")
+
+
 def _apply_branding(root, minimal_baseline):
     """Apply Linxira OS branding in the target.
 
@@ -804,6 +825,7 @@ def _apply_branding(root, minimal_baseline):
     script = Path(root) / "usr/share/libalpm/scripts/linxira-branding"
     if not script.is_file():
         return None
+    _normalize_os_release(root)
     error = _run_with_retries(
         ["arch-chroot", root, "/usr/share/libalpm/scripts/linxira-branding"],
         "Linxira OS branding",

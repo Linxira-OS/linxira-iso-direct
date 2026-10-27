@@ -884,10 +884,30 @@ class BrandingTests(unittest.TestCase):
             self.os_release.write_text('PRETTY_NAME="Linxira OS"\n', encoding="utf-8")
             return None
 
-        with mock.patch.object(linxirapacstrap, "_run_with_retries", side_effect=fake):
+        with mock.patch.object(linxirapacstrap, "_normalize_os_release"), \
+             mock.patch.object(linxirapacstrap, "_run_with_retries", side_effect=fake):
             self.assertIsNone(linxirapacstrap._apply_branding(str(self.root), False))
 
     def test_fails_when_branding_did_not_apply(self):
-        with mock.patch.object(linxirapacstrap, "_run_with_retries", return_value=None):
+        with mock.patch.object(linxirapacstrap, "_normalize_os_release"), \
+             mock.patch.object(linxirapacstrap, "_run_with_retries", return_value=None):
             error = linxirapacstrap._apply_branding(str(self.root), False)
         self.assertEqual(error, "os-release branding did not apply")
+
+
+    def test_normalizes_regular_etc_os_release(self):
+        etc = self.root / "etc/os-release"
+        etc.parent.mkdir(parents=True)
+        etc.write_text('PRETTY_NAME="Arch Linux"\n', encoding="utf-8")
+        self.os_release.unlink()
+        with mock.patch.object(Path, "symlink_to") as symlink:
+            linxirapacstrap._normalize_os_release(str(self.root))
+        self.assertEqual(self.os_release.read_text(encoding="utf-8"), 'PRETTY_NAME="Arch Linux"\n')
+        self.assertFalse(etc.exists())
+        symlink.assert_called_once_with("../usr/lib/os-release")
+
+    def test_keeps_existing_os_release_symlink(self):
+        with mock.patch.object(Path, "is_symlink", return_value=True), \
+             mock.patch.object(Path, "symlink_to") as symlink:
+            linxirapacstrap._normalize_os_release(str(self.root))
+        symlink.assert_not_called()
