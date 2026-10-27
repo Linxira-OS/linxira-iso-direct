@@ -607,11 +607,13 @@ sudo -n true
 # 2026-10-27: mkarchiso 的 pacstrap 读 airootfs 内 pacman.conf 的 CacheDir
 # (/var/cache/pacman/pkg), 与上面的闭包下载缓存不是同一目录, 导致已校验的包
 # 被重新下载(实际事故: qt6-webengine 95MB 反复超时)。把 CacheDir 指向工作缓存。
-case_dir="${profile_copy}/airootfs/etc/pacman.conf"
-if [[ -f $case_dir ]]; then
-  sed -i "s|^#\?CacheDir.*|CacheDir = ${package_cache}/|" "$case_dir"
-  grep -q "^CacheDir = ${package_cache}/" "$case_dir" || {
-    printf 'CacheDir was not rewritten in %s\n' "$case_dir" >&2
+# 注: archiso profile 的 pacman.conf 在 profile 根目录(不在 airootfs 内),
+# 该文件同时被闭包解析与 mkarchiso pacstrap 使用。
+profile_pacman_conf="${profile_copy}/pacman.conf"
+if [[ -f $profile_pacman_conf ]]; then
+  sed -i "s|^#\?CacheDir.*|CacheDir = ${package_cache}/|" "$profile_pacman_conf"
+  grep -q "^CacheDir = ${package_cache}/" "$profile_pacman_conf" || {
+    printf 'CacheDir was not rewritten in %s\n' "$profile_pacman_conf" >&2
     exit 1
   }
 fi
