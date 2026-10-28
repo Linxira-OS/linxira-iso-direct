@@ -793,6 +793,27 @@ def _enable_target_linxira_repo(root):
     config_path.write_text(contents, encoding="utf-8")
 
 
+def _enable_pacman_fetch(root):
+    """Route target downloads through linxira-pacman-fetch when the update
+    package shipped it.  The adapter probes GitHub accelerators and resumes
+    partial files; leaving XferCommand unset would make the first boot fall
+    back to the same stalled direct connection."""
+    if not (Path(root) / "usr/bin/linxira-pacman-fetch").is_file():
+        return
+    config_path = Path(root) / "etc/pacman.conf"
+    contents = config_path.read_text(encoding="utf-8")
+    if re.search(r"(?m)^\s*XferCommand\s*=", contents):
+        return
+    if "[options]" not in contents:
+        return
+    contents = contents.replace(
+        "[options]",
+        "[options]\nXferCommand = /usr/bin/linxira-pacman-fetch %u %o",
+        1,
+    )
+    config_path.write_text(contents, encoding="utf-8")
+
+
 def _normalize_os_release(root):
     """Make /etc/os-release a symlink to /usr/lib/os-release.
 
@@ -1394,6 +1415,7 @@ def run():
     if not result.get("minimalBaseline"):
         try:
             _enable_target_linxira_repo(root)
+            _enable_pacman_fetch(root)
         except (OSError, ValueError) as error:
             return "Target configuration could not be finalized", str(error)
 
