@@ -521,6 +521,14 @@ install -Dm644 "$candidate_manifest" \
 branding_dir="${profile_copy}/airootfs/etc/calamares/branding/linxira"
 bsdtar -xOf "$artwork_package" usr/share/linxira/linxira-logo.svg \
   >"${branding_dir}/linxira-logo.svg"
+# 幻灯片背景是深色(#101419), 深墨横排版在上面等于隐形; 单独解出白框版给 show.qml 用。
+# 旧版 artwork 包还没有这个成员, 探测后才覆盖, 否则保留仓内已提交的副本(构建不失败)。
+if bsdtar -tf "$artwork_package" | grep -qx 'usr/share/linxira/linxira-logo-on-dark.svg'; then
+  bsdtar -xOf "$artwork_package" usr/share/linxira/linxira-logo-on-dark.svg \
+    >"${branding_dir}/linxira-logo-on-dark.svg"
+else
+  printf 'artwork 包不含 linxira-logo-on-dark.svg, 使用 branding 目录内的副本\n'
+fi
 
 theme_target="${profile_copy}/airootfs/usr/share/plymouth/themes/linxira"
 mkdir -p "$theme_target"

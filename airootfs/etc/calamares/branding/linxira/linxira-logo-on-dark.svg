@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 512" width="1024" height="512" role="img" aria-label="Linxira logo (for dark backgrounds)">
+  <g transform="translate(24 96) scale(0.62)">
+    <path d="M215 72H440V440H72V215" fill="none" stroke="#E9EFF0" stroke-width="36" stroke-linejoin="miter"/>
+    <path d="M72 215V72H215" fill="none" stroke="#20B8B0" stroke-width="76" stroke-linejoin="miter"/>
+    <circle fill="#F36F5D" cx="164" cy="164" r="41"/>
+  </g>
+  <text x="392" y="252" font-family="system-ui, 'Noto Sans', 'DejaVu Sans', sans-serif" font-size="104" font-weight="600" letter-spacing="2" fill="#E9EFF0">Linxira</text>
+  <text x="394" y="310" font-family="system-ui, 'Noto Sans', 'DejaVu Sans', sans-serif" font-size="34" letter-spacing="9" fill="#20B8B0">OS</text>
+</svg>

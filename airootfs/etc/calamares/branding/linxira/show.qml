@@ -21,7 +21,7 @@ Presentation {
                     width: 200
                     height: 200
                     anchors.verticalCenter: parent.verticalCenter
-                    source: "linxira-logo.svg"
+                    source: "linxira-logo-on-dark.svg"
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                 }
