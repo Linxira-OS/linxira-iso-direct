@@ -19,20 +19,28 @@ TEMPLATE_FILES = ("timeshift.json", "linxira-timeshift-autosnap.hook", "linxira-
 # "linux-lts" 会被误排到 "linux" 之前 —— 默认启动落进 LTS。GRUB_TOP_LEVEL
 # 显式钉死主线内核为顶层默认项, LTS 仅作平铺菜单中的回退项。
 GRUB_SETTINGS = [
-    ("GRUB_DEFAULT", "0"),
+    # 记住上次启动项: Windows 重启回 Windows, Linux 重启回 Linux。
+    # 初次安装由 _seed_saved_entry 写入 saved_entry=0(主线内核); 之后 GRUB
+    # 在用户选择条目时更新。不再固定 GRUB_DEFAULT=0 把用户按在 Linux。
+    ("GRUB_DEFAULT", "saved"),
+    ("GRUB_SAVEDEFAULT", "true"),
     ("GRUB_TOP_LEVEL", '"/boot/vmlinuz-linux"'),
     ("GRUB_TIMEOUT", "5"),
     ("GRUB_DISABLE_SUBMENU", "true"),
     ("GRUB_DISABLE_RECOVERY", "true"),
+    # 默认开 os-prober; 安装期检测到目标 ESP 的 Windows 后改为 true,
+    # 只保留确定性生成的 Windows 条目, 避免两个同名条目。
     ("GRUB_DISABLE_OS_PROBER", "false"),
     ("GRUB_CMDLINE_LINUX_DEFAULT", '"quiet splash nowatchdog nvme_load=YES"'),
     # 2026-10-26: 安装后保持与 ISO 一致的引导外观(不再是一片黑白纯文本)。
     ("GRUB_TERMINAL_OUTPUT", '"gfxterm"'),
     ("GRUB_TIMEOUT_STYLE", '"menu"'),
     ("GRUB_THEME", '"/boot/grub/themes/linxira/theme-24.txt"'),
-    ("GRUB_GFXMODE", '"auto"'),
+    # 优先尝试高分辨率; 全部不支持时回退 auto。2.8K/4K 不再落进 1024x768。
+    ("GRUB_GFXMODE", '"3840x2160,2880x1800,2560x1600,2560x1440,1920x1080,auto"'),
     ("GRUB_GFXPAYLOAD_LINUX", '"keep"'),
-    ("GRUB_BACKGROUND", '"/boot/grub/linxira-splash.png"'),
+    # 主题自己用 desktop-color 画近黑底; 不再叠加旧 splash, 避免 2.8K 拉伸发糊。
+    ("GRUB_BACKGROUND", '""'),
     ("GRUB_COLOR_NORMAL", '"light-gray/black"'),
     ("GRUB_COLOR_HIGHLIGHT", '"black/light-cyan"'),
 ]
@@ -167,6 +175,46 @@ def _install_grub_splash(root):
         shutil.copytree(GRUB_THEME_SOURCE, destination, dirs_exist_ok=True)
 
 
+def _target_version(root):
+    """Read the image version written by the build, with os-release fallback."""
+    release = root / "etc/linxira-release"
+    if release.is_file():
+        version = release.read_text(encoding="utf-8").strip().splitlines()
+        if version:
+            return version[0].strip()
+    os_release = root / "etc/os-release"
+    if os_release.is_file():
+        for line in os_release.read_text(encoding="utf-8").splitlines():
+            if line.startswith("VERSION_ID="):
+                return line.split("=", 1)[1].strip().strip('"')
+    return ""
+
+
+def _brand_theme_title(root):
+    """Put the concrete image version in the GRUB theme title."""
+    version = _target_version(root)
+    if not version:
+        return
+    title = f"Linxira OS {version}".replace("\\", "\\\\").replace('"', '\\"')
+    theme_dir = root / "boot/grub/themes/linxira"
+    for path in theme_dir.glob("theme-*.txt"):
+        text = path.read_text(encoding="utf-8")
+        text = re.sub(r'^title-text:.*$', f'title-text: "{title}"', text, count=1, flags=re.MULTILINE)
+        path.write_text(text, encoding="utf-8")
+
+
+def _seed_saved_entry(root):
+    """Create a valid GRUB environment block so saved default starts at entry 0."""
+    grub_dir = root / "boot/grub"
+    grub_dir.mkdir(parents=True, exist_ok=True)
+    env = grub_dir / "grubenv"
+    if env.exists():
+        return
+    block = "# GRUB Environment Block\nsaved_entry=0\n"
+    block += "#" * (1024 - len(block))
+    env.write_text(block, encoding="utf-8")
+
+
 ESP_MOUNTPOINTS = ("/boot/efi", "/efi")
 WINDOWS_LOADER = "EFI/Microsoft/Boot/bootmgfw.efi"
 
@@ -239,13 +287,13 @@ if loadfont "$theme_dir/fonts/linxira-ui-24.pf2" ; then
     loadfont "$theme_dir/fonts/linxira-ui-bold-48.pf2"
     ui=20
     if [ -n "$gfxheight" ]; then
-        if [ "$gfxheight" -gt 2400 ]; then
+        if [ "$gfxheight" -gt 2000 ]; then
             ui=48
-        elif [ "$gfxheight" -gt 1700 ]; then
+        elif [ "$gfxheight" -gt 1400 ]; then
             ui=40
-        elif [ "$gfxheight" -gt 1200 ]; then
+        elif [ "$gfxheight" -gt 1000 ]; then
             ui=32
-        elif [ "$gfxheight" -gt 800 ]; then
+        elif [ "$gfxheight" -gt 700 ]; then
             ui=24
         fi
     fi
@@ -280,10 +328,19 @@ def run():
             _set_config_value(grub_btrfs_path, key, value)
 
         _install_grub_splash(root)
+        _brand_theme_title(root)
+        _seed_saved_entry(root)
         _append_mkinitcpio_hook(root / MKINITCPIO_TARGET)
         _copy_templates(root)
         _write_rescue_entry(root, root / "etc/grub.d")
-        _write_windows_entry(root, root / "etc/grub.d")
+        windows_entry = _write_windows_entry(root, root / "etc/grub.d")
+        # 自建条目存在时关闭 os-prober, 否则会出现两个 Windows 条目
+        # (括号里分别带/不带 "on /dev/...")。
+        _set_config_value(
+            grub_path,
+            "GRUB_DISABLE_OS_PROBER",
+            "true" if windows_entry else "false",
+        )
         _write_theme_selector(root, root / "etc/grub.d")
     except (OSError, RuntimeError) as error:
         return "Boot and snapshot configuration failed", str(error)

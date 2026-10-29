@@ -1,18 +1,18 @@
 # Linxira OS GRUB theme — 20px
-desktop-image: "background.png"
-desktop-color: "#0E1417"
+desktop-color: "#050607"
 title-text: "Linxira OS"
 title-font: "DejaVu Sans Mono Bold 20"
-title-color: "#F8FAFC"
+title-color: "#F5F7FA"
 
 + boot_menu {
-    left = 4%
-    top = 26%
-    width = 92%
+    left = 8%
+    top = 28%
+    width = 58%
     height = 50%
     item_font = "DejaVu Sans Mono Regular 20"
-    item_color = "#C7D2DA"
-    selected_item_color = "#20B8B0"
+    selected_item_font = "DejaVu Sans Mono Bold 20"
+    item_color = "#E5E7EB"
+    selected_item_color = "#39D98A"
     item_height = 36
     item_padding = 7
     item_spacing = 5
@@ -22,21 +22,29 @@ title-color: "#F8FAFC"
 }
 
 + label {
-    left = 4%
-    top = 80%
-    width = 92%
+    left = 8%
+    top = 82%
+    width = 60%
     align = "left"
     font = "DejaVu Sans Mono Regular 20"
-    color = "#64748B"
+    color = "#9AA4B2"
     text = "Up/Down: select   Enter: boot"
 }
 
 + label {
     id = "__timeout__"
-    left = 4%
-    top = 84%
+    left = 8%
+    top = 86%
     align = "left"
     font = "DejaVu Sans Mono Regular 20"
-    color = "#64748B"
+    color = "#9AA4B2"
     text = "%d"
+}
+
++ image {
+    left = 86%
+    top = 88%
+    width = 9%
+    height = 8%
+    file = "logo.png"
 }

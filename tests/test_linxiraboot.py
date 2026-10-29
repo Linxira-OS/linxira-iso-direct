@@ -23,7 +23,7 @@ spec.loader.exec_module(linxiraboot)
 
 
 class BootMenuTests(unittest.TestCase):
-    def test_target_ships_os_prober_so_grub_lists_windows(self):
+    def test_target_ships_os_prober_for_non_windows_fallback(self):
         target = set((PROFILE_ROOT / "target-packages.x86_64").read_text(encoding="utf-8").split())
         self.assertIn("os-prober", target)
         settings = dict(linxiraboot.GRUB_SETTINGS)
@@ -33,7 +33,7 @@ class BootMenuTests(unittest.TestCase):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TERMINAL_OUTPUT"], '"gfxterm"')
         self.assertEqual(settings["GRUB_THEME"], '"/boot/grub/themes/linxira/theme-24.txt"')
-        self.assertEqual(settings["GRUB_BACKGROUND"], '"/boot/grub/linxira-splash.png"')
+        self.assertEqual(settings["GRUB_BACKGROUND"], '""')
         self.assertIn("GRUB_COLOR_HIGHLIGHT", settings)
 
     def test_grub_splash_is_copied_into_the_target(self):
@@ -59,15 +59,41 @@ class BootMenuTests(unittest.TestCase):
             self.assertEqual((root / "usr/share/linxira/grub/splash.png").read_bytes(), source.read_bytes())
             theme_dest = root / "boot/grub/themes/linxira"
             self.assertTrue((theme_dest / "theme-24.txt").is_file())
-            self.assertTrue((theme_dest / "background.png").is_file())
+            self.assertTrue((theme_dest / "logo.png").is_file())
             self.assertTrue((theme_dest / "fonts/linxira-ui-32.pf2").is_file())
 
 
     def test_grub_settings_pin_mainline_top_level(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TOP_LEVEL"], '"/boot/vmlinuz-linux"')
-        self.assertEqual(settings["GRUB_DEFAULT"], "0")
+        self.assertEqual(settings["GRUB_DEFAULT"], "saved")
+        self.assertEqual(settings["GRUB_SAVEDEFAULT"], "true")
         self.assertEqual(settings["GRUB_DISABLE_SUBMENU"], "true")
+        self.assertIn("2880x1800", settings["GRUB_GFXMODE"])
+
+    def test_saved_entry_is_seeded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            linxiraboot._seed_saved_entry(root)
+            env = (root / "boot/grub/grubenv").read_text(encoding="utf-8")
+            self.assertIn("saved_entry=0", env)
+            self.assertEqual(len(env), 1024)
+
+    def test_theme_title_uses_image_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            theme = root / "boot/grub/themes/linxira"
+            theme.mkdir(parents=True)
+            (theme / "theme-32.txt").write_text(
+                'title-text: "Linxira OS"\n', encoding="utf-8"
+            )
+            (root / "etc").mkdir()
+            (root / "etc/linxira-release").write_text("2026.10.30\n", encoding="utf-8")
+            linxiraboot._brand_theme_title(root)
+            self.assertIn(
+                'title-text: "Linxira OS 2026.10.30"',
+                (theme / "theme-32.txt").read_text(encoding="utf-8"),
+            )
 
     def test_rescue_entry_generated_from_fstab_uuid(self):
         with tempfile.TemporaryDirectory() as directory:

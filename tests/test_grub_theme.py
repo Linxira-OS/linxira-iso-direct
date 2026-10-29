@@ -33,8 +33,11 @@ class GrubThemeTests(unittest.TestCase):
                     continue
                 kind = line[1:].strip().split()[0].rstrip("{").strip()
                 self.assertIn(kind, OBJECT_TYPES, f"{path.name}: {line}")
-            self.assertIn('desktop-image: "background.png"', text)
+            self.assertIn('desktop-color: "#050607"', text)
+            self.assertNotIn("desktop-image", text)
             self.assertIn(f'item_font = "DejaVu Sans Mono Regular {size}"', text)
+            self.assertIn(f'selected_item_font = "DejaVu Sans Mono Bold {size}"', text)
+            self.assertIn('file = "logo.png"', text)
             self.assertIn('id = "__timeout__"', text)
 
     def test_small_vm_modes_fit_without_scrolling(self):
@@ -50,8 +53,8 @@ class GrubThemeTests(unittest.TestCase):
                 # 提示行/倒计时仍在屏内
                 self.assertLess(0.84 * height, height)
 
-    def test_background_and_fonts_exist(self):
-        self.assertTrue((THEME_DIR / "background.png").is_file())
+    def test_logo_and_fonts_exist(self):
+        self.assertTrue((THEME_DIR / "logo.png").is_file())
         for size in SIZES:
             self.assertTrue((THEME_DIR / f"fonts/linxira-ui-{size}.pf2").is_file())
             self.assertTrue((THEME_DIR / f"fonts/linxira-ui-bold-{size}.pf2").is_file())

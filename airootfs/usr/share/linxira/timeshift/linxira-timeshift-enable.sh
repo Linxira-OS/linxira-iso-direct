@@ -8,10 +8,38 @@ HOOK_NAME="linxira-timeshift-autosnap.hook"
 
 log()  { printf '[linxira-timeshift] %s\n' "$*"; }
 
+# 快照位置不能留空: Timeshift 不会替用户选盘, 空 UUID 只会让创建静默失败。
+# 从目标系统 fstab 取根 btrfs UUID; 加密根再从 crypttab 取外层 LUKS UUID。
+bind_timeshift_location() {
+    conf=/etc/timeshift/timeshift.json
+    [ -f "$conf" ] && [ -f /etc/fstab ] || return 0
+
+    root_spec=$(awk '$2 == "/" { print $1; exit }' /etc/fstab)
+    root_type=$(awk '$2 == "/" { print $3; exit }' /etc/fstab)
+    [ "$root_type" = "btrfs" ] || return 0
+
+    case "$root_spec" in
+        UUID=*) root_uuid=${root_spec#UUID=} ;;
+        /dev/*) root_uuid=$(blkid -s UUID -o value "$root_spec" 2>/dev/null) ;;
+        *) root_uuid="" ;;
+    esac
+    [ -n "$root_uuid" ] || return 0
+
+    parent_uuid=""
+    if [ -f /etc/crypttab ]; then
+        parent_uuid=$(awk '$3 == "luks" && $2 ~ /^UUID=/ { print substr($2, 6); exit }' /etc/crypttab)
+    fi
+
+    sed -i 's|"backup_device_uuid"[[:space:]]*:[[:space:]]*"[^"]*"|"backup_device_uuid": "'"$root_uuid"'"|' "$conf"
+    sed -i 's|"parent_device_uuid"[[:space:]]*:[[:space:]]*"[^"]*"|"parent_device_uuid": "'"$parent_uuid"'"|' "$conf"
+    log "快照位置已绑定: $root_uuid${parent_uuid:+ (LUKS $parent_uuid)}"
+}
+
 # 1. 应用默认配置 (btrfs 模式, 每日 3 份 + 启动 3 份)
 if [ -f "$DIR/timeshift.json" ]; then
     mkdir -p /etc/timeshift
     cp -f "$DIR/timeshift.json" /etc/timeshift/timeshift.json
+    bind_timeshift_location
     log "timeshift 配置已应用 (btrfs 模式, 每日 3 + 启动 3)"
 else
     log "警告: 未找到配置模板 $DIR/timeshift.json, 保留现有 timeshift 配置"
@@ -50,15 +78,20 @@ if [ -f /usr/lib/initcpio/hooks/grub-btrfs-overlayfs ] && [ -f /etc/mkinitcpio.c
     fi
 fi
 
-# 5. 初始快照 (btrfs CoW 秒级; 失败不阻塞安装)
+# 5. 初始快照 (btrfs CoW 秒级; 失败必须显式记录, 不能假装启用)
+initial_failed=0
 if command -v timeshift >/dev/null 2>&1; then
     existing="$(timeshift --list 2>/dev/null | grep -cE '^[[:space:]]*[0-9]+[[:space:]]+>' || true)"
     if [ "${existing:-0}" != "0" ]; then
         log "已存在快照 ($existing 个), 跳过初始快照"
     else
-        timeshift --create --comments "Linxira 初始快照" --tags O >/dev/null 2>&1 \
-            && log "初始快照已创建" \
-            || log "警告: 初始快照创建失败 (重启后可手动: timeshift --create)"
+        if timeshift --create --comments "Linxira 初始快照" --tags O >/dev/null 2>&1 \
+            && timeshift --list 2>/dev/null | grep -q "Linxira 初始快照"; then
+            log "初始快照已创建"
+        else
+            log "错误: 初始快照创建失败, 快照功能未启用 (检查位置: timeshift --list)"
+            initial_failed=1
+        fi
     fi
 fi
 
@@ -70,7 +103,7 @@ Description=Linxira OS boot snapshot (Timeshift B)
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'l=$$(/usr/bin/timeshift --list 2>/dev/null); d=$$(date +%F); echo "$$l" | grep -q "$${d}.*boot snapshot" || /usr/bin/timeshift --create --comments "boot snapshot" --tags B'
+ExecStart=/bin/sh -c '/bin/sh /usr/share/linxira/timeshift/linxira-timeshift-prune.sh || true; l=$$(/usr/bin/timeshift --list 2>/dev/null); d=$$(date +%F); echo "$$l" | grep -q "$${d}.*boot snapshot" || /usr/bin/timeshift --create --comments "boot snapshot" --tags B; /bin/sh /usr/share/linxira/timeshift/linxira-timeshift-prune.sh || true'
 EOF
     cat > /etc/systemd/system/linxira-timeshift-boot.timer <<'EOF'
 [Unit]
@@ -89,7 +122,7 @@ Description=Linxira OS daily snapshot (Timeshift D)
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'l=$$(/usr/bin/timeshift --list 2>/dev/null); d=$$(date +%F); echo "$$l" | grep -q "$${d}.*daily snapshot" || /usr/bin/timeshift --create --comments "daily snapshot" --tags D'
+ExecStart=/bin/sh -c '/bin/sh /usr/share/linxira/timeshift/linxira-timeshift-prune.sh || true; l=$$(/usr/bin/timeshift --list 2>/dev/null); d=$$(date +%F); echo "$$l" | grep -q "$${d}.*daily snapshot" || /usr/bin/timeshift --create --comments "daily snapshot" --tags D; /bin/sh /usr/share/linxira/timeshift/linxira-timeshift-prune.sh || true'
 EOF
     cat > /etc/systemd/system/linxira-timeshift-daily.timer <<'EOF'
 [Unit]
@@ -126,4 +159,4 @@ if [ -x "$DIR/linxira-timeshift-prune.sh" ]; then
     sh "$DIR/linxira-timeshift-prune.sh" || true
 fi
 
-exit 0
+exit "$initial_failed"
