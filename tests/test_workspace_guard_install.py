@@ -37,20 +37,20 @@ class WorkspaceGuardInstallTests(unittest.TestCase):
 
     def test_install_script_is_safe_by_construction(self):
         source = INSTALL_SCRIPT.read_text(encoding="utf-8")
-        # 守护分区不进 fstab —— 开机不挂载, 没有 root 就够不着快照。
-        self.assertIn("/etc/fstab", source)
-        self.assertIn("mkfs.ext4", source)
+        # 同盘目录: 不建分区, 不改分区表, 不写 fstab。
+        self.assertIn("STORE=/var/lib/linxira/guard", source)
+        self.assertNotIn("sfdisk", source)
+        self.assertNotIn("mkfs.ext4", source)
+        self.assertNotIn("/etc/fstab", source)
         self.assertIn("chmod 600", source)
         # 失败一律跳过而不是中断安装。
         self.assertNotIn("set -e", source)
-        self.assertIn("workspace guard stays off", source)
         self.assertIn("linxira-config workspace-guard adopt-installer", source)
 
-    def test_install_script_refuses_to_touch_the_system_disk(self):
+    def test_install_script_never_partitions_other_disks(self):
         source = INSTALL_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("root_disk", source)
-        self.assertIn("root_source", source)
-        self.assertIn("MIN_SIZE_GIB=32", source)
+        for forbidden in ("root_disk", "root_source", "pick_disk", "lsblk", "partx", "blkid"):
+            self.assertNotIn(forbidden, source)
 
     def test_official_handbook_ships_on_the_iso(self):
         packages = TARGET_PACKAGES.read_text(encoding="utf-8").split()
