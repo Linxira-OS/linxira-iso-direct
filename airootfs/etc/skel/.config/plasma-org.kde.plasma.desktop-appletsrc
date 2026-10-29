@@ -48,7 +48,7 @@ immutability=1
 plugin=org.kde.plasma.icontasks
 
 [Containments][23][Applets][26][Configuration][General]
-launchers=applications:linxira-installer.desktop,applications:org.linxira.Welcome.desktop,applications:com.shellyorg.shelly.desktop,applications:org.kde.dolphin.desktop,applications:firefox.desktop,applications:systemsettings.desktop
+launchers=applications:org.kde.konsole.desktop,applications:linxira-installer.desktop,applications:org.linxira.Welcome.desktop,applications:com.shellyorg.shelly.desktop,applications:org.kde.dolphin.desktop,applications:firefox.desktop,applications:systemsettings.desktop
 
 [Containments][23][Applets][27]
 immutability=1

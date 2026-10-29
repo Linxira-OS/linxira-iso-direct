@@ -118,9 +118,30 @@ class BrandingConfigurationTests(unittest.TestCase):
         storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-plasma"]})
         with mock.patch.object(linxirabranding.libcalamares, "globalstorage", storage, create=True):
             self.assertTrue(linxirabranding._plasma_selected())
+            self.assertFalse(linxirabranding._cosmic_selected())
         storage = types.SimpleNamespace(value=lambda key: {"selectedLeafIds": ["desktop-cosmic"]})
         with mock.patch.object(linxirabranding.libcalamares, "globalstorage", storage, create=True):
             self.assertFalse(linxirabranding._plasma_selected())
+            self.assertTrue(linxirabranding._cosmic_selected())
+
+    def test_cosmic_favorites_are_copied_for_cosmic_installs(self):
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            '_copy_file(\n                "/etc/skel/.config/cosmic/com.system76.CosmicAppList/v1/favorites",\n                root,\n            )',
+            source,
+        )
+
+    def test_kde_panel_pins_terminal_before_the_installer(self):
+        panel = (
+            MODULE_PATH.parents[5]
+            / "etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc"
+        )
+        contents = panel.read_text(encoding="utf-8")
+        self.assertIn(
+            "launchers=applications:org.kde.konsole.desktop,"
+            "applications:linxira-installer.desktop,",
+            contents,
+        )
 
     def test_branding_installs_desktop_neutral_welcome_autostart(self):
         source = MODULE_PATH.read_text(encoding="utf-8")

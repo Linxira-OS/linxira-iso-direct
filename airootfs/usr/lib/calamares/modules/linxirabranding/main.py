@@ -103,11 +103,17 @@ def _configure_grub_distributor(root):
     grub_path.write_text(contents, encoding="utf-8")
 
 
-def _plasma_selected():
+def _desktop_selected(leaf):
     selection = libcalamares.globalstorage.value("linxiraSoftwareSelection")
-    return isinstance(selection, dict) and "desktop-plasma" in selection.get(
-        "selectedLeafIds", []
-    )
+    return isinstance(selection, dict) and leaf in selection.get("selectedLeafIds", [])
+
+
+def _plasma_selected():
+    return _desktop_selected("desktop-plasma")
+
+
+def _cosmic_selected():
+    return _desktop_selected("desktop-cosmic")
 
 
 def run():
@@ -124,6 +130,11 @@ def run():
             _copy_file("/etc/skel/.config/kdeglobals", root)
             _install_target_plasma_layout(
                 "/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc",
+                root,
+            )
+        elif _cosmic_selected():
+            _copy_file(
+                "/etc/skel/.config/cosmic/com.system76.CosmicAppList/v1/favorites",
                 root,
             )
 

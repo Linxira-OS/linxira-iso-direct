@@ -13,6 +13,8 @@ GRUB_BTRFS_TARGET = Path("etc/default/grub-btrfs/config")
 MKINITCPIO_TARGET = Path("etc/mkinitcpio.conf")
 TEMPLATE_DIR = Path("/usr/share/linxira/timeshift")
 TEMPLATE_FILES = ("timeshift.json", "linxira-timeshift-autosnap.hook", "linxira-timeshift-enable.sh", "linxira-timeshift-prune.sh")
+WORKSPACE_TEMPLATE_DIR = Path("/usr/share/linxira/workspace-guard")
+WORKSPACE_TEMPLATE_FILES = ("linxira-workspace-guard-install.sh",)
 
 # 顶层平铺双内核: linux(最新) 与 linux-lts 都直接可见, GRUB_DEFAULT=0 默认最新。
 # 2026-09-20 修复: GRUB_DEFAULT=0 的"第一项"由 grub 10_linux 字符串排序决定,
@@ -93,7 +95,20 @@ def _copy_templates(root):
         source = TEMPLATE_DIR / name
         if not source.is_file():
             raise RuntimeError(f"missing timeshift template: {source}")
-        shutil.copy2(source, target_dir / name)
+        destination = target_dir / name
+        shutil.copy2(source, destination)
+        if name.endswith(".sh"):
+            destination.chmod(0o755)
+
+    workspace_target_dir = root / "usr/share/linxira/workspace-guard"
+    workspace_target_dir.mkdir(parents=True, exist_ok=True)
+    for name in WORKSPACE_TEMPLATE_FILES:
+        source = WORKSPACE_TEMPLATE_DIR / name
+        if not source.is_file():
+            raise RuntimeError(f"missing workspace-guard template: {source}")
+        destination = workspace_target_dir / name
+        shutil.copy2(source, destination)
+        destination.chmod(0o755)
 
 
 def _root_identity(fstab_path):

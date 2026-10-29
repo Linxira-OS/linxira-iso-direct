@@ -20,7 +20,20 @@ class WorkspaceGuardInstallTests(unittest.TestCase):
         command = module["script"][0]["command"]
         # "-" 前缀: 守护是加分项, 建不出来也不能让装机失败。
         self.assertTrue(command.startswith("-"), command)
+        # 显式解释器: 脚本即使没有可执行位也能运行。
+        self.assertTrue(command.startswith("-/bin/bash "), command)
         self.assertIn("linxira-workspace-guard-install.sh", command)
+
+    def test_timeshift_module_uses_an_explicit_interpreter(self):
+        module = yaml.safe_load(
+            (
+                PROFILE_ROOT
+                / "airootfs/etc/calamares/modules/shellprocess_linxira-timeshift.conf"
+            ).read_text(encoding="utf-8")
+        )
+        command = module["script"][0]["command"]
+        self.assertTrue(command.startswith("-/bin/sh "), command)
+        self.assertIn("linxira-timeshift-enable.sh", command)
 
     def test_module_is_wired_after_timeshift(self):
         sequence = yaml.safe_load(SETTINGS.read_text(encoding="utf-8"))["sequence"][1]["exec"]
