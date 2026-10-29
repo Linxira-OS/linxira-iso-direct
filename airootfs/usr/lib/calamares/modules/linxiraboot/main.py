@@ -47,11 +47,14 @@ GRUB_SETTINGS = [
     ("GRUB_COLOR_HIGHLIGHT", '"black/light-cyan"'),
 ]
 
-# 快照菜单: timeshift 后端 + 菜单条目上限 + 日期与描述
+# 快照菜单: grub-btrfs 自动识别 Timeshift/Snapper; daemon 模式由
+# grub-btrfsd 的 --timeshift-auto / /.snapshots 决定, 不再写后端变量。
 GRUB_BTRFS_SETTINGS = [
-    ("GRUB_BTRFS_SNAPSHOT_BACKEND", '"timeshift"'),
     ("GRUB_BTRFS_LIMIT", '"10"'),
-    ("GRUB_BTRFS_TITLE_FORMAT", '("date" "desc")'),
+    # 上游只接受 date/snapshot/type/description; "desc" 会被忽略。
+    ("GRUB_BTRFS_TITLE_FORMAT", '("date" "description")'),
+    # 根分区在 LUKS 上时, GRUB 需要先解锁才能读取快照子卷。
+    ("GRUB_BTRFS_ENABLE_CRYPTODISK", '"true"'),
 ]
 
 

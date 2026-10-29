@@ -35,6 +35,21 @@ class BootOrderTests(unittest.TestCase):
         self.assertIn("grub-mkconfig", source)
 
 
+    def test_snapshot_menu_config_matches_upstream_grub_btrfs(self):
+        # grub-btrfs 自动识别 Timeshift/Snapper; 没有 SNAPSHOT_BACKEND 变量。
+        # TITLE_FORMAT 只接受 date/snapshot/type/description。
+        source = LINXIRABOOT.read_text(encoding="utf-8")
+        self.assertNotIn("GRUB_BTRFS_SNAPSHOT_BACKEND", source)
+        self.assertIn(
+            '("GRUB_BTRFS_TITLE_FORMAT", \'("date" "description")\')',
+            source,
+        )
+        self.assertIn(
+            '("GRUB_BTRFS_ENABLE_CRYPTODISK", \'"true"\')',
+            source,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 
