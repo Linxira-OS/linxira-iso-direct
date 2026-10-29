@@ -5,6 +5,7 @@
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK_NAME="linxira-timeshift-autosnap.hook"
+BOOTLOADER="$(cat /etc/linxira/bootloader 2>/dev/null || echo grub)"
 
 log()  { printf '[linxira-timeshift] %s\n' "$*"; }
 
@@ -61,7 +62,7 @@ if [ -f "$DIR/$HOOK_NAME" ]; then
 fi
 
 # 3. grub-btrfsd 使用 timeshift 自动探测 (timeshift >= 22.06 快照目录含随机 PID)
-if [ -x /usr/bin/grub-btrfsd ] && [ -f /usr/lib/systemd/system/grub-btrfsd.service ]; then
+if [ "$BOOTLOADER" = "grub" ] && [ -x /usr/bin/grub-btrfsd ] && [ -f /usr/lib/systemd/system/grub-btrfsd.service ]; then
     mkdir -p /etc/systemd/system/grub-btrfsd.service.d
     {
         printf '%s\n' '[Service]'
@@ -79,12 +80,36 @@ if [ -x /usr/bin/grub-btrfsd ] && [ -f /usr/lib/systemd/system/grub-btrfsd.servi
 fi
 
 # 4. 引导只读快照所需 initramfs 钩子 (新增时重建 initramfs; 安装期已由 linxiraboot 处理)
-if [ -f /usr/lib/initcpio/hooks/grub-btrfs-overlayfs ] && [ -f /etc/mkinitcpio.conf ]; then
+if [ "$BOOTLOADER" = "grub" ] && [ -f /usr/lib/initcpio/hooks/grub-btrfs-overlayfs ] && [ -f /etc/mkinitcpio.conf ]; then
     if ! grep -qE '^HOOKS=\(.*grub-btrfs-overlayfs' /etc/mkinitcpio.conf; then
         sed -i 's/^HOOKS=(\(.*\))/HOOKS=(\1 grub-btrfs-overlayfs)/' /etc/mkinitcpio.conf
         mkinitcpio -P 2>/dev/null || true
         log "grub-btrfs-overlayfs 已加入 HOOKS, initramfs 已重建"
     fi
+fi
+
+# 4.5 非 GRUB 引导器: Timeshift 快照仍由本脚本创建, 引导菜单交给对应插件。
+#     - systemd-boot: systemd-boot-snapshots (支持 Timeshift)
+#     - rEFInd:       refind-btrfs (支持 Timeshift, 需配置快照目录)
+if [ "$BOOTLOADER" != "grub" ]; then
+    case "$BOOTLOADER" in
+        systemd-boot)
+            if command -v update-systemd-boot-snapshots >/dev/null 2>&1; then
+                systemctl enable systemd-boot-entries.path timeshift-snapshots.path 2>/dev/null || true
+                update-systemd-boot-snapshots >/dev/null 2>&1 || true
+                log "systemd-boot 快照菜单已更新"
+            else
+                log "systemd-boot: 未安装 systemd-boot-snapshots, 跳过引导菜单集成"
+            fi
+            ;;
+        refind)
+            if command -v refind-btrfs >/dev/null 2>&1; then
+                log "rEFInd: 已检测到 refind-btrfs; 需配置 Timeshift 快照目录后启用"
+            else
+                log "rEFInd: 未安装 refind-btrfs, 跳过引导菜单集成"
+            fi
+            ;;
+    esac
 fi
 
 # 5. 初始快照 (真实启动后再创建; 安装 chroot 里 sys_root 指向 live 根)
@@ -182,7 +207,7 @@ if ! running_in_chroot; then
 fi
 
 # 8. 重生成 grub.cfg, 快照子菜单 (41_snapshots-btrfs, 由 grub-btrfs 包提供)
-if [ -x /usr/bin/grub-mkconfig ] && [ -d /boot/grub ]; then
+if [ "$BOOTLOADER" = "grub" ] && [ -x /usr/bin/grub-mkconfig ] && [ -d /boot/grub ]; then
     grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 \
         && log "GRUB 快照菜单已生成" \
         || log "警告: grub-mkconfig 失败, 快照菜单将由 grub-btrfsd 首次触发时生成"

@@ -10,6 +10,7 @@ import libcalamares
 
 GRUB_TARGET = Path("etc/default/grub")
 GRUB_BTRFS_TARGET = Path("etc/default/grub-btrfs/config")
+BOOTLOADER_TARGET = Path("etc/linxira/bootloader")
 MKINITCPIO_TARGET = Path("etc/mkinitcpio.conf")
 TEMPLATE_DIR = Path("/usr/share/linxira/timeshift")
 TEMPLATE_FILES = ("timeshift.json", "linxira-timeshift-autosnap.hook", "linxira-timeshift-enable.sh", "linxira-timeshift-prune.sh")
@@ -328,13 +329,35 @@ def _write_theme_selector(root, grub_script_dir):
     return True
 
 
+def _selected_bootloader():
+    value = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
+    return value if value in ("grub", "systemd-boot", "refind") else "grub"
+
+
+def _write_bootloader_marker(root, bootloader):
+    marker = root / BOOTLOADER_TARGET
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(bootloader + "\n", encoding="utf-8")
+
+
 def run():
     root_value = libcalamares.globalstorage.value("rootMountPoint")
     if not root_value or not os.path.ismount(root_value):
         return "Target is not mounted", "The target root mount is unavailable."
 
     root = Path(root_value)
+    bootloader = _selected_bootloader()
     try:
+        _write_bootloader_marker(root, bootloader)
+        _copy_templates(root)
+
+        if bootloader != "grub":
+            libcalamares.utils.debug(
+                f"linxiraboot: bootloader is {bootloader}; GRUB-only boot setup skipped"
+            )
+            libcalamares.job.setprogress(1.0)
+            return None
+
         grub_path = root / GRUB_TARGET
         for key, value in GRUB_SETTINGS:
             _set_config_value(grub_path, key, value)
@@ -349,7 +372,6 @@ def run():
         _brand_theme_title(root)
         _seed_saved_entry(root)
         _append_mkinitcpio_hook(root / MKINITCPIO_TARGET)
-        _copy_templates(root)
         _write_rescue_entry(root, root / "etc/grub.d")
         windows_entry = _write_windows_entry(root, root / "etc/grub.d")
         # 自建条目存在时关闭 os-prober, 否则会出现两个 Windows 条目

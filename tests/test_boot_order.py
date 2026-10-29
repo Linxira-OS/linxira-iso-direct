@@ -49,6 +49,25 @@ class BootOrderTests(unittest.TestCase):
             source,
         )
 
+    def test_snapshot_setup_is_bootloader_aware(self):
+        # systemd-boot / rEFInd 安装时不能要求 grub-btrfs 配置, 也不能
+        # 无条件启用 grub-btrfsd; 引导菜单由各自插件负责。
+        boot = LINXIRABOOT.read_text(encoding="utf-8")
+        self.assertIn("packagechooser_bootloader", boot)
+        self.assertIn("etc/linxira/bootloader", boot)
+        self.assertIn('if bootloader != "grub"', boot)
+
+        services = (
+            PROFILE_ROOT / "airootfs/etc/calamares/modules/services-systemd.conf"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("grub-btrfsd", services)
+
+        timeshift = TIMESHIFT_ENABLE.read_text(encoding="utf-8")
+        self.assertIn('BOOTLOADER="$(cat /etc/linxira/bootloader', timeshift)
+        self.assertIn('[ "$BOOTLOADER" = "grub" ]', timeshift)
+        self.assertIn("systemd-boot-snapshots", timeshift)
+        self.assertIn("refind-btrfs", timeshift)
+
 
 if __name__ == "__main__":
     unittest.main()
