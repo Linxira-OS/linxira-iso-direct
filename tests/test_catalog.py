@@ -33,18 +33,16 @@ class CatalogTests(unittest.TestCase):
         for name in ("desktop", "components", "applications"):
             self.assertNotIn(f"packagechooser@{name}", settings)
             self.assertFalse((MODULES_PATH / f"packagechooser_{name}.conf").exists())
-        self.assertIn("packagechooser@bootloader", settings)
+        # 引导器选择暂时关闭, 固定 GRUB; chooser 配置保留但不接入 sequence。
+        self.assertNotIn("packagechooser@bootloader", settings)
         self.assertTrue((MODULES_PATH / "packagechooser_bootloader.conf").is_file())
 
-    def test_installer_exposes_linxira_system_boot_page(self):
+    def test_installer_temporarily_fixes_grub_as_bootloader(self):
         settings = SETTINGS_PATH.read_text(encoding="utf-8")
         bootloader = (MODULES_PATH / "bootloader.conf").read_text(encoding="utf-8")
-        chooser = (MODULES_PATH / "packagechooser_bootloader.conf").read_text(encoding="utf-8")
-        self.assertIn("module: packagechooser", settings)
-        self.assertIn("efiBootLoaderVar: packagechooser_bootloader", bootloader)
-        self.assertIn('step: "系统引导"', chooser)
-        self.assertIn("linux-lts", chooser)
-        self.assertIn("Linxira OS", chooser)
+        self.assertNotIn("packagechooser@bootloader", settings)
+        self.assertNotIn("efiBootLoaderVar", bootloader)
+        self.assertIn("efiBootLoader: grub", bootloader)
 
     def test_installer_has_no_unfrozen_optional_package_transaction(self):
         settings = SETTINGS_PATH.read_text(encoding="utf-8")

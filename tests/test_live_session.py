@@ -240,7 +240,7 @@ class LiveSessionTests(unittest.TestCase):
     def test_calamares_sequence_has_valid_indentation(self):
         settings = (PROFILE_ROOT / "airootfs/etc/calamares/settings.conf").read_text(encoding="utf-8")
         self.assertIn(
-            "      - keyboard\n      - packagechooser@bootloader\n      - partition\n      - linxirasoftware\n      - users\n      - summary",
+            "      - keyboard\n      - partition\n      - linxirasoftware\n      - users\n      - summary",
             settings,
         )
         self.assertNotIn("       - partition", settings)
