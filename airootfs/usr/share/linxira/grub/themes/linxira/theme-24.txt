@@ -1,14 +1,15 @@
 # Linxira OS GRUB theme — 24px
-desktop-color: "#050607"
+# 纯黑底, 菜单居中; logo 用固定 2:1 像素尺寸, 不用百分比拉伸。
+desktop-color: "#000000"
 title-text: "Linxira OS"
 title-font: "DejaVu Sans Mono Bold 24"
 title-color: "#F5F7FA"
 
 + boot_menu {
-    left = 8%
-    top = 28%
-    width = 58%
-    height = 50%
+    left = 20%
+    top = 24%
+    width = 60%
+    height = 52%
     item_font = "DejaVu Sans Mono Regular 24"
     selected_item_font = "DejaVu Sans Mono Bold 24"
     item_color = "#E5E7EB"
@@ -19,11 +20,12 @@ title-color: "#F5F7FA"
     icon_width = 0
     icon_height = 0
     scrollbar = false
+    menu_pixmap_style = "menu_*.png"
 }
 
 + label {
-    left = 8%
-    top = 82%
+    left = 20%
+    top = 78%
     width = 60%
     align = "left"
     font = "DejaVu Sans Mono Regular 24"
@@ -33,8 +35,8 @@ title-color: "#F5F7FA"
 
 + label {
     id = "__timeout__"
-    left = 8%
-    top = 86%
+    left = 20%
+    top = 82%
     align = "left"
     font = "DejaVu Sans Mono Regular 24"
     color = "#9AA4B2"
@@ -42,9 +44,9 @@ title-color: "#F5F7FA"
 }
 
 + image {
-    left = 86%
-    top = 88%
-    width = 9%
-    height = 8%
+    left = 80%
+    top = 85%
+    width = 180
+    height = 90
     file = "logo.png"
 }

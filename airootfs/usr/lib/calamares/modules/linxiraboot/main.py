@@ -39,10 +39,10 @@ GRUB_SETTINGS = [
     ("GRUB_TERMINAL_OUTPUT", '"gfxterm"'),
     ("GRUB_TIMEOUT_STYLE", '"menu"'),
     ("GRUB_THEME", '"/boot/grub/themes/linxira/theme-24.txt"'),
-    # 优先尝试高分辨率; 全部不支持时回退 auto。2.8K/4K 不再落进 1024x768。
-    ("GRUB_GFXMODE", '"3840x2160,2880x1800,2560x1600,2560x1440,1920x1080,auto"'),
+    # 优先尝试高分辨率; 覆盖 16:9 / 16:10 / 21:9 / 4:3, 全部不支持时回退 auto。
+    ("GRUB_GFXMODE", '"3840x2160,3440x1440,2880x1800,2560x1600,2560x1440,2560x1080,1920x1200,1920x1080,1680x1050,1600x900,1440x900,1366x768,1280x800,1280x720,1024x768,auto"'),
     ("GRUB_GFXPAYLOAD_LINUX", '"keep"'),
-    # 主题自己用 desktop-color 画近黑底; 不再叠加旧 splash, 避免 2.8K 拉伸发糊。
+    # 主题自己用 desktop-color 画纯黑底; 不再叠加旧 splash, 避免分辨率拉伸发糊。
     ("GRUB_BACKGROUND", '""'),
     ("GRUB_COLOR_NORMAL", '"light-gray/black"'),
     ("GRUB_COLOR_HIGHLIGHT", '"black/light-cyan"'),
