@@ -293,7 +293,44 @@ def _require_paths(root, paths, failures):
             failures.append("empty initramfs: " + path)
 
 
+def _grub_env_failures(root):
+    """Reject the two GRUB boot regressions at install time.
+
+    UEFI installs must use the ESP grubenv; a leftover btrfs
+    /boot/grub/grubenv is exactly what produces "sparse file not allowed".
+    BIOS installs keep the btrfs block and are allowed here.
+    """
+    root_path = Path(root)
+    marker = root_path / "etc/linxira/bootloader"
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() != "grub":
+        return []
+    fstab = root_path / "etc/fstab"
+    if not fstab.is_file():
+        return []
+    esp_mountpoint = None
+    for line in fstab.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[0] and not fields[0].startswith("#"):
+            if fields[1] in ("/boot/efi", "/efi"):
+                esp_mountpoint = fields[1]
+                break
+    if esp_mountpoint is None:
+        return []
+
+    failures = []
+    env = root_path / esp_mountpoint.lstrip("/") / "EFI/linxira/grubenv"
+    if not env.is_file():
+        failures.append("GRUB env missing from ESP: /EFI/linxira/grubenv")
+    elif "saved_entry=" not in env.read_text(encoding="utf-8", errors="replace"):
+        failures.append("GRUB env on ESP has no saved_entry")
+    legacy = root_path / "boot/grub/grubenv"
+    if legacy.exists():
+        failures.append("btrfs GRUB env must be removed: /boot/grub/grubenv")
+    return failures
+
+
 def _shared_target_checks(root, failures):
+    failures.extend(_grub_env_failures(root))
     for path in _obsolete_initcpio_configs(root):
         failures.append("obsolete initramfs module in: " + path)
 

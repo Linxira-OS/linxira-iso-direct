@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -74,7 +75,37 @@ class BootMenuTests(unittest.TestCase):
         self.assertIn("2880x1800", settings["GRUB_GFXMODE"])
 
     @unittest.skipUnless(shutil.which("grub-editenv"), "requires grub-editenv")
-    def test_saved_entry_is_prepared_with_grub_editenv(self):
+    def test_saved_entry_is_written_to_the_esp_not_btrfs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=0123-4567 /boot/efi vfat umask=0077 0 2\n",
+                encoding="utf-8",
+            )
+            # Simulate grub-install having left a btrfs env block behind.
+            legacy = root / "boot/grub/grubenv"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text("saved_entry=9\n", encoding="utf-8")
+
+            linxiraboot._prepare_grub_env(root)
+
+            env = (root / "boot/efi/EFI/linxira/grubenv").read_text(encoding="utf-8")
+            self.assertIn("saved_entry=0", env)
+            self.assertEqual(len(env), 1024)
+            self.assertFalse(legacy.exists(), "btrfs grubenv must not survive")
+            selector = (root / "etc/grub.d/02_linxira-env").read_text(encoding="utf-8")
+            self.assertIn("--fs-uuid --set=esp 0123-4567", selector)
+            self.assertIn("load_env -f \"(${esp})/EFI/linxira/grubenv\"", selector)
+            self.assertIn("set env_block=\"(${esp})/EFI/linxira/grubenv\"", selector)
+            self.assertIn("set default=\"${saved_entry}\"", selector)
+            self.assertTrue((root / "etc/grub.d/02_linxira-env").stat().st_mode & 0o111)
+
+    @unittest.skipUnless(
+        shutil.which("grub-editenv") and shutil.which("grub-script-check"),
+        "requires grub-editenv and grub-script-check",
+    )
+    def test_generated_env_selector_is_valid_grub_script(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "etc").mkdir()
@@ -83,9 +114,30 @@ class BootMenuTests(unittest.TestCase):
                 encoding="utf-8",
             )
             linxiraboot._prepare_grub_env(root)
+            selector = root / "etc/grub.d/02_linxira-env"
+            body = "\n".join(selector.read_text(encoding="utf-8").splitlines()[2:]) + "\n"
+            check = root / "selector.body"
+            check.write_text(body, encoding="utf-8")
+            result = subprocess.run(
+                [shutil.which("grub-script-check"), str(check)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipUnless(shutil.which("grub-editenv"), "requires grub-editenv")
+    def test_no_esp_keeps_bios_grubenv_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=root-uuid / btrfs rw,subvol=@ 0 0\n",
+                encoding="utf-8",
+            )
+            linxiraboot._prepare_grub_env(root)
             env = (root / "boot/grub/grubenv").read_text(encoding="utf-8")
             self.assertIn("saved_entry=0", env)
-            self.assertEqual(len(env), 1024)
+            self.assertFalse((root / "etc/grub.d/02_linxira-env").exists())
 
     def test_theme_title_uses_image_version(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -138,6 +190,39 @@ class BootMenuTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class CryptodiskGuardTests(unittest.TestCase):
+    def test_true_without_cryptdevice_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            btrfs = root / "grub-btrfs"
+            grub = root / "grub"
+            btrfs.write_text('GRUB_BTRFS_ENABLE_CRYPTODISK="true"\n', encoding="utf-8")
+            grub.write_text('GRUB_CMDLINE_LINUX_DEFAULT="quiet"\n', encoding="utf-8")
+            with self.assertRaises(RuntimeError):
+                linxiraboot._guard_cryptodisk_config(btrfs, grub)
+
+    def test_true_with_cryptdevice_is_allowed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            btrfs = root / "grub-btrfs"
+            grub = root / "grub"
+            btrfs.write_text('GRUB_BTRFS_ENABLE_CRYPTODISK="true"\n', encoding="utf-8")
+            grub.write_text(
+                'GRUB_CMDLINE_LINUX_DEFAULT="cryptdevice=UUID=abc:cryptdev"\n',
+                encoding="utf-8",
+            )
+            linxiraboot._guard_cryptodisk_config(btrfs, grub)
+
+    def test_false_without_cryptdevice_is_allowed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            btrfs = root / "grub-btrfs"
+            grub = root / "grub"
+            btrfs.write_text('GRUB_BTRFS_ENABLE_CRYPTODISK="false"\n', encoding="utf-8")
+            grub.write_text('GRUB_CMDLINE_LINUX_DEFAULT="quiet"\n', encoding="utf-8")
+            linxiraboot._guard_cryptodisk_config(btrfs, grub)
+
 
 class WindowsEntryTests(unittest.TestCase):
     """Windows 条目由安装期确定性生成, 不依赖 chroot 里的 os-prober。"""

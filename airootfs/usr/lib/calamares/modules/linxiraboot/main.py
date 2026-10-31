@@ -17,13 +17,17 @@ TEMPLATE_DIR = Path("/usr/share/linxira/timeshift")
 TEMPLATE_FILES = ("timeshift.json", "linxira-timeshift-autosnap.hook", "linxira-timeshift-enable.sh", "linxira-timeshift-prune.sh")
 WORKSPACE_TEMPLATE_DIR = Path("/usr/share/linxira/workspace-guard")
 WORKSPACE_TEMPLATE_FILES = ("linxira-workspace-guard-install.sh",)
+GRUB_ENV_TEMPLATE_DIR = Path("/usr/share/linxira/grub")
+GRUB_ENV_TEMPLATE_FILES = ("linxira-grub-env.sh",)
+ESP_ENV_RELATIVE = Path("EFI/linxira/grubenv")
 
 # 顶层平铺双内核: linux(最新) 与 linux-lts 都直接可见。
 # 2026-09-20 修复: GRUB_DEFAULT=0 的"第一项"由 grub 10_linux 字符串排序决定,
 # "linux-lts" 会被误排到 "linux" 之前 —— 默认启动落进 LTS。GRUB_TOP_LEVEL
 # 显式钉死主线内核为顶层默认项, LTS 仅作平铺菜单中的回退项。
 # 2026-10-31 重构: GRUB_DEFAULT=saved, saved_entry 由 GRUB 菜单选择更新;
-# btrfs 上先对 /boot/grub 做 chattr +C, 避免 grubenv 变成 inline extent。
+# UEFI 安装把 grubenv 放到 ESP, 不再在 btrfs /boot 上创建会被 GRUB 判定为
+# sparse 的 inline 文件。BIOS 安装才回退到 /boot/grub/grubenv。
 GRUB_SETTINGS = [
     # 记住上次启动项: Windows 重启回 Windows, Linux 重启回 Linux/LTS。
     # 初次安装由 _prepare_grub_env 写入 saved_entry=0(主线内核); 之后 GRUB
@@ -86,6 +90,27 @@ def _set_config_value(path, key, value):
     path.write_text(contents, encoding="utf-8")
 
 
+def _guard_cryptodisk_config(grub_btrfs_path, grub_path):
+    """Refuse CRYPTODISK=true unless the kernel cmdline has cryptdevice.
+
+    grub-btrfs 41_snapshots-btrfs runs under `set -e` and greps for
+    cryptdevice=; a non-LUKS install with CRYPTODISK enabled therefore makes
+    grub-mkconfig exit 1.  LUKS snapshot support must add the matching
+    cryptdevice=UUID=...:cryptdev at the same time as this flag.
+    """
+    btrfs_config = grub_btrfs_path.read_text(encoding="utf-8")
+    if not re.search(
+        r'^GRUB_BTRFS_ENABLE_CRYPTODISK="?true"?$', btrfs_config, re.MULTILINE
+    ):
+        return
+    if "cryptdevice=" in grub_path.read_text(encoding="utf-8"):
+        return
+    raise RuntimeError(
+        "GRUB_BTRFS_ENABLE_CRYPTODISK=true requires cryptdevice=UUID=...:cryptdev "
+        "in /etc/default/grub; non-LUKS installs must leave it false"
+    )
+
+
 def _append_mkinitcpio_hook(path):
     """grub-btrfs 上游要求 grub-btrfs-overlayfs 位于 HOOKS 末尾。"""
     contents = path.read_text(encoding="utf-8")
@@ -120,6 +145,16 @@ def _copy_templates(root):
         if not source.is_file():
             raise RuntimeError(f"missing workspace-guard template: {source}")
         destination = workspace_target_dir / name
+        shutil.copy2(source, destination)
+        destination.chmod(0o755)
+
+    grub_target_dir = root / "usr/share/linxira/grub"
+    grub_target_dir.mkdir(parents=True, exist_ok=True)
+    for name in GRUB_ENV_TEMPLATE_FILES:
+        source = GRUB_ENV_TEMPLATE_DIR / name
+        if not source.is_file():
+            raise RuntimeError(f"missing GRUB env template: {source}")
+        destination = grub_target_dir / name
         shutil.copy2(source, destination)
         destination.chmod(0o755)
 
@@ -234,17 +269,36 @@ def _brand_theme_title(root):
 def _prepare_grub_env(root):
     """Create a GRUB environment block that is actually writable at boot.
 
-    On btrfs, a 1024-byte grubenv normally lands in an inline extent.  GRUB's
-    env block is a preallocated, fixed-location block; an inline/compressed
-    extent can trigger "sparse file not allowed", so GRUB_SAVEDEFAULT silently
-    stops persisting the last menu entry.
+    UEFI: put grubenv on the ESP (FAT).  A 1024-byte grubenv on btrfs can be
+    stored as a sparse inline extent; GRUB's load_env() then aborts with
+    "sparse file not allowed" before the menu appears.  The ESP is FAT, so it
+    has no inline extents and is writable by GRUB's save_env.
 
-    chattr +C on the directory forces new files to be non-CoW (and therefore
-    non-inline).  grub-editenv must be used instead of writing the block by
-    hand, because it is the tool that understands GRUB's environment format.
+    The generated 02_linxira-env script loads the ESP block with
+    `load_env -f` and sets env_block so savedefault writes back to the ESP.
+    The installer removes any /boot/grub/grubenv after grub-install; keeping
+    that file would make 00_header load the btrfs block first and fail.
+
+    BIOS installs have no ESP; they retain the old btrfs fallback.
     """
     grub_dir = root / "boot/grub"
     grub_dir.mkdir(parents=True, exist_ok=True)
+
+    fstab = root / "etc/fstab"
+    esp = _esp_identity(fstab) if fstab.is_file() else None
+    if esp is not None:
+        mountpoint, uuid = esp
+        esp_dir = root / mountpoint.lstrip("/") / ESP_ENV_RELATIVE.parent
+        esp_dir.mkdir(parents=True, exist_ok=True)
+        env = esp_dir / ESP_ENV_RELATIVE.name
+        if not env.exists():
+            _create_grub_env(env, "0")
+        # Never leave a btrfs env block for GRUB's 00_header to load.
+        legacy = grub_dir / "grubenv"
+        if legacy.exists():
+            legacy.unlink()
+        _write_grub_env_selector(root / "etc/grub.d", uuid)
+        return
 
     stat = shutil.which("stat")
     if not stat:
@@ -265,19 +319,22 @@ def _prepare_grub_env(root):
             raise RuntimeError(
                 f"failed to disable CoW for {grub_dir}: {error}"
             ) from error
-
-    grub_editenv = shutil.which("grub-editenv")
-    if not grub_editenv:
-        raise RuntimeError("grub-editenv is required to create the GRUB env block")
-
     env = grub_dir / "grubenv"
     if env.exists():
         env.unlink()
-    subprocess.run([grub_editenv, str(env), "create"], check=True)
+    _create_grub_env(env, "0")
+
+
+def _create_grub_env(path, saved_entry):
+    grub_editenv = shutil.which("grub-editenv")
+    if not grub_editenv:
+        raise RuntimeError("grub-editenv is required to create the GRUB env block")
+    subprocess.run([grub_editenv, str(path), "create"], check=True)
     subprocess.run(
-        [grub_editenv, str(env), "set", "saved_entry=0"],
+        [grub_editenv, str(path), "set", f"saved_entry={saved_entry}"],
         check=True,
     )
+
 
 
 ESP_MOUNTPOINTS = ("/boot/efi", "/efi")
@@ -297,6 +354,36 @@ def _esp_identity(fstab_path):
         if spec.startswith("UUID="):
             return fields[1], spec[len("UUID="):]
     return None
+
+
+def _write_grub_env_selector(grub_script_dir, esp_uuid):
+    """Load saved_entry from the ESP and point savedefault at the same block.
+
+    00_header runs before this script, so it cannot see env_block yet.  We
+    therefore load the env ourselves and re-apply `default` for this boot.
+    savedefault (defined by 00_header) uses env_block from this point on.
+    """
+    script = "\n".join([
+        "#!/bin/sh",
+        "exec tail -n +3 \"$0\"",
+        "search --no-floppy --fs-uuid --set=esp " + esp_uuid,
+        "if [ -s \"(${esp})/EFI/linxira/grubenv\" ]; then",
+        "  load_env -f \"(${esp})/EFI/linxira/grubenv\"",
+        "  set env_block=\"(${esp})/EFI/linxira/grubenv\"",
+        "  export env_block",
+        "  if [ -z \"${next_entry}\" ]; then",
+        "    if [ -n \"${saved_entry}\" ]; then",
+        "      set default=\"${saved_entry}\"",
+        "    fi",
+        "  fi",
+        "fi",
+        "",
+    ])
+    grub_script_dir.mkdir(parents=True, exist_ok=True)
+    path = grub_script_dir / "02_linxira-env"
+    path.write_text(script, encoding="utf-8")
+    os.chmod(path, 0o755)
+    return path
 
 
 def _write_windows_entry(root, grub_script_dir):
@@ -415,6 +502,7 @@ def run():
             raise RuntimeError("/etc/default/grub-btrfs/config not found (grub-btrfs missing?)")
         for key, value in GRUB_BTRFS_SETTINGS:
             _set_config_value(grub_btrfs_path, key, value)
+        _guard_cryptodisk_config(grub_btrfs_path, grub_path)
 
         _install_grub_splash(root)
         _brand_theme_title(root)

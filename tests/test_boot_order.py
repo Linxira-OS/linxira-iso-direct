@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import unittest
 
 
@@ -49,6 +50,14 @@ class BootOrderTests(unittest.TestCase):
             source,
         )
 
+    def test_cryptodisk_is_never_enabled_without_a_cryptdevice(self):
+        # grub-btrfs 的 41_snapshots-btrfs 在 set -e 下 grep cryptdevice;
+        # 非 LUKS 安装若开启 CRYPTODISK, grub-mkconfig 会直接失败。
+        # 将来接 LUKS 快照时必须同时写 cryptdevice=UUID=...:cryptdev。
+        source = LINXIRABOOT.read_text(encoding="utf-8")
+        if '("GRUB_BTRFS_ENABLE_CRYPTODISK", \'"true"\')' in source:
+            self.assertIn("cryptdevice=UUID=", source)
+
     def test_snapshot_setup_is_bootloader_aware(self):
         # systemd-boot / rEFInd 安装时不能要求 grub-btrfs 配置, 也不能
         # 无条件启用 grub-btrfsd; 引导菜单由各自插件负责。
@@ -80,3 +89,19 @@ class FirmwareInteractionTests(unittest.TestCase):
         )
         self.assertIn("installEFIFallback: false", config)
         self.assertIn("efiBootloaderId: linxira", config)
+
+    def test_install_removes_btrfs_grubenv_after_bootloader(self):
+        # grub-install 会在 btrfs /boot/grub 重建空 grubenv; 必须在首启前删掉,
+        # 否则 GRUB 的 load_env 仍会报 sparse file not allowed。
+        settings = (
+            PROFILE_ROOT / "airootfs/etc/calamares/settings.conf"
+        ).read_text(encoding="utf-8")
+        self.assertIn("- shellprocess@linxira-grub-env", settings)
+        self.assertLess(settings.index("- bootloader"), settings.index("- shellprocess@linxira-grub-env"))
+        script = (
+            PROFILE_ROOT / "airootfs/usr/share/linxira/grub/linxira-grub-env.sh"
+        )
+        self.assertTrue(script.is_file())
+        self.assertIn("rm -f /boot/grub/grubenv", script.read_text(encoding="utf-8"))
+        if sys.platform.startswith("linux"):
+            self.assertTrue(script.stat().st_mode & 0o111)

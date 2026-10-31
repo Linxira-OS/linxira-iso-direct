@@ -496,3 +496,46 @@ class InstalledSystemValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GrubEnvValidationTests(unittest.TestCase):
+    def test_esp_grubenv_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=0123-4567 /boot/efi vfat umask=0077 0 2\n",
+                encoding="utf-8",
+            )
+            env = root / "boot/efi/EFI/linxira/grubenv"
+            env.parent.mkdir(parents=True)
+            env.write_text("saved_entry=0\n", encoding="utf-8")
+            self.assertEqual(linxiravalidate._grub_env_failures(root), [])
+
+    def test_btrfs_grubenv_is_rejected_when_esp_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=0123-4567 /boot/efi vfat umask=0077 0 2\n",
+                encoding="utf-8",
+            )
+            legacy = root / "boot/grub/grubenv"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text("saved_entry=0\n", encoding="utf-8")
+            failures = linxiravalidate._grub_env_failures(root)
+            self.assertTrue(any("ESP" in item for item in failures))
+            self.assertTrue(any("/boot/grub/grubenv" in item for item in failures))
+
+    def test_bios_install_without_esp_is_not_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=root-uuid / btrfs rw,subvol=@ 0 0\n",
+                encoding="utf-8",
+            )
+            legacy = root / "boot/grub/grubenv"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text("saved_entry=0\n", encoding="utf-8")
+            self.assertEqual(linxiravalidate._grub_env_failures(root), [])
