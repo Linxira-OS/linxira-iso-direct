@@ -280,7 +280,7 @@ def _prepare_grub_env(root):
     The installer removes any /boot/grub/grubenv after grub-install; keeping
     that file would make 00_header load the btrfs block first and fail.
 
-    BIOS installs have no ESP; they retain the old btrfs fallback.
+    BIOS installs have no ESP; they get no grubenv and no savedefault.
     """
     grub_dir = root / "boot/grub"
     grub_dir.mkdir(parents=True, exist_ok=True)
@@ -301,29 +301,17 @@ def _prepare_grub_env(root):
         _write_grub_env_selector(root / "etc/grub.d", uuid)
         return
 
-    stat = shutil.which("stat")
-    if not stat:
-        raise RuntimeError("stat is required to detect the /boot/grub filesystem")
-    filesystem = subprocess.run(
-        [stat, "-f", "-c", "%T", str(grub_dir)],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if filesystem == "btrfs":
-        chattr = shutil.which("chattr")
-        if not chattr:
-            raise RuntimeError("chattr is required to prepare btrfs grubenv")
-        try:
-            subprocess.run([chattr, "+C", str(grub_dir)], check=True)
-        except subprocess.CalledProcessError as error:
-            raise RuntimeError(
-                f"failed to disable CoW for {grub_dir}: {error}"
-            ) from error
-    env = grub_dir / "grubenv"
-    if env.exists():
-        env.unlink()
-    _create_grub_env(env, "0")
+    # BIOS/no-ESP installs have no FAT env block.  Never create a btrfs
+    # /boot/grub/grubenv: 00_header would load it and fail with
+    # "sparse file not allowed".  Disable savedefault so a later menu
+    # selection cannot recreate that broken block either.
+    legacy = grub_dir / "grubenv"
+    if legacy.exists():
+        legacy.unlink()
+    grub_default = root / "etc/default/grub"
+    if grub_default.is_file():
+        _set_config_value(grub_default, "GRUB_DEFAULT", "0")
+        _set_config_value(grub_default, "GRUB_SAVEDEFAULT", "false")
 
 
 def _create_grub_env(path, saved_entry):

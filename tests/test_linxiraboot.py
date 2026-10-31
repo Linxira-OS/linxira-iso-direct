@@ -125,8 +125,7 @@ class BootMenuTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    @unittest.skipUnless(shutil.which("grub-editenv"), "requires grub-editenv")
-    def test_no_esp_keeps_bios_grubenv_fallback(self):
+    def test_no_esp_does_not_create_a_btrfs_grubenv(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "etc").mkdir()
@@ -134,10 +133,17 @@ class BootMenuTests(unittest.TestCase):
                 "UUID=root-uuid / btrfs rw,subvol=@ 0 0\n",
                 encoding="utf-8",
             )
+            (root / "etc/default").mkdir()
+            (root / "etc/default/grub").write_text(
+                'GRUB_DEFAULT=saved\nGRUB_SAVEDEFAULT=true\n',
+                encoding="utf-8",
+            )
             linxiraboot._prepare_grub_env(root)
-            env = (root / "boot/grub/grubenv").read_text(encoding="utf-8")
-            self.assertIn("saved_entry=0", env)
+            self.assertFalse((root / "boot/grub/grubenv").exists())
             self.assertFalse((root / "etc/grub.d/02_linxira-env").exists())
+            grub = (root / "etc/default/grub").read_text(encoding="utf-8")
+            self.assertIn("GRUB_DEFAULT=0", grub)
+            self.assertIn("GRUB_SAVEDEFAULT=false", grub)
 
     def test_theme_title_uses_image_version(self):
         with tempfile.TemporaryDirectory() as directory:
