@@ -4,7 +4,7 @@
 # 2026-09-20 修复: 默认内核不再依赖 menuentry 标题匹配(品牌化改标题后
 # "Linux linux" 标题已不存在, 锁定静默失效落进 LTS)。GRUB_TOP_LEVEL 显式
 # 钉死主线内核为顶层默认项 —— 与 linxiraboot 模块写入目标系统的配置一致。
-GRUB_TIMEOUT=5
+GRUB_TIMEOUT=2
 GRUB_DISABLE_SUBMENU=true
 GRUB_TOP_LEVEL="/boot/vmlinuz-linux"
 GRUB_DEFAULT=0

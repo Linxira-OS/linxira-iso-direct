@@ -24,7 +24,7 @@ class BootOrderTests(unittest.TestCase):
         # 平铺菜单: linux 与 linux-lts 条目并列, 引导阶段即可直接选内核。
         defaults = GRUB_DEFAULTS.read_text(encoding="utf-8")
         self.assertIn("GRUB_DISABLE_SUBMENU=true", defaults)
-        self.assertIn("GRUB_TIMEOUT=5", defaults)
+        self.assertIn("GRUB_TIMEOUT=2", defaults)
         self.assertIn("GRUB_DISABLE_OS_PROBER=false", defaults)
 
     def test_snapshot_menu_daemon_is_timeshift_auto(self):
@@ -45,7 +45,7 @@ class BootOrderTests(unittest.TestCase):
             source,
         )
         self.assertIn(
-            '("GRUB_BTRFS_ENABLE_CRYPTODISK", \'"true"\')',
+            '("GRUB_BTRFS_ENABLE_CRYPTODISK", \'"false"\')',
             source,
         )
 

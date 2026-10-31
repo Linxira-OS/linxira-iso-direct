@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -68,13 +69,20 @@ class BootMenuTests(unittest.TestCase):
         self.assertEqual(settings["GRUB_TOP_LEVEL"], '"/boot/vmlinuz-linux"')
         self.assertEqual(settings["GRUB_DEFAULT"], "saved")
         self.assertEqual(settings["GRUB_SAVEDEFAULT"], "true")
+        self.assertEqual(settings["GRUB_TIMEOUT"], "2")
         self.assertEqual(settings["GRUB_DISABLE_SUBMENU"], "true")
         self.assertIn("2880x1800", settings["GRUB_GFXMODE"])
 
-    def test_saved_entry_is_seeded(self):
+    @unittest.skipUnless(shutil.which("grub-editenv"), "requires grub-editenv")
+    def test_saved_entry_is_prepared_with_grub_editenv(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            linxiraboot._seed_saved_entry(root)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=0123-4567 /boot/efi vfat umask=0077 0 2\n",
+                encoding="utf-8",
+            )
+            linxiraboot._prepare_grub_env(root)
             env = (root / "boot/grub/grubenv").read_text(encoding="utf-8")
             self.assertIn("saved_entry=0", env)
             self.assertEqual(len(env), 1024)
@@ -153,12 +161,14 @@ class WindowsEntryTests(unittest.TestCase):
         self.write_fstab()
         self.make_windows_loader()
         self.assertTrue(linxiraboot._write_windows_entry(self.root, self.grub_d))
-        script = (self.grub_d / "42_linxira-windows").read_text(encoding="utf-8")
+        script = (self.grub_d / "29_linxira-windows").read_text(encoding="utf-8")
         self.assertIn("--class windows", script)
+        self.assertIn("--id 'linxira-windows'", script)
         self.assertIn("--fs-uuid --set=root 1234-ABCD", script)
         self.assertIn("chainloader /EFI/Microsoft/Boot/bootmgfw.efi", script)
+        self.assertIn("savedefault", script)
         if sys.platform.startswith("linux"):
-            self.assertTrue((self.grub_d / "42_linxira-windows").stat().st_mode & 0o111)
+            self.assertTrue((self.grub_d / "29_linxira-windows").stat().st_mode & 0o111)
 
     def test_efi_mountpoint_variant_is_supported(self):
         self.write_fstab("UUID=9999-FFFF /efi vfat umask=0077 0 2")
@@ -168,7 +178,7 @@ class WindowsEntryTests(unittest.TestCase):
     def test_no_windows_loader_means_no_entry(self):
         self.write_fstab()
         self.assertFalse(linxiraboot._write_windows_entry(self.root, self.grub_d))
-        self.assertFalse((self.grub_d / "42_linxira-windows").exists())
+        self.assertFalse((self.grub_d / "29_linxira-windows").exists())
 
     def test_no_esp_in_fstab_means_no_entry(self):
         self.write_fstab("UUID=root-uuid / btrfs subvol=/ 0 0")
