@@ -431,6 +431,19 @@ if ! diff -r -q "${profile_copy}/grub/themes/linxira" \
   exit 1
 fi
 
+# 2026-10-31: grub-btrfs 41_snapshots-btrfs 在 set -e 下 grep cryptdevice;
+# 非 LUKS 安装开启 GRUB_BTRFS_ENABLE_CRYPTODISK 会让 grub-mkconfig 直接失败。
+# 构建期先拒绝这种组合, 避免把必坏镜像发出去。
+grub_defaults="${profile_copy}/airootfs/etc/default/grub"
+grub_btrfs_config="${profile_copy}/airootfs/etc/default/grub-btrfs/config"
+if [[ -f "$grub_btrfs_config" ]] &&
+   grep -Eq '^GRUB_BTRFS_ENABLE_CRYPTODISK="?true"?$' "$grub_btrfs_config"; then
+  if [[ ! -f "$grub_defaults" ]] || ! grep -Fq 'cryptdevice=' "$grub_defaults"; then
+    printf '错误: GRUB_BTRFS_ENABLE_CRYPTODISK=true 但 /etc/default/grub 没有 cryptdevice= (非 LUKS 安装)\n' >&2
+    exit 1
+  fi
+fi
+
 # 发布证据依赖(2026-10-24): 生成器与镜像版本写入 profile, 由 customize_airootfs.sh 调用
 notices_src="${profile_dir}/../packages/scripts/generate-notices.py"
 [[ -r "$notices_src" ]] || { echo "错误: 缺少 $notices_src" >&2; exit 1; }
