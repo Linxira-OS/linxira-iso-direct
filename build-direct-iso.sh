@@ -433,15 +433,12 @@ fi
 
 # 2026-10-31: grub-btrfs 41_snapshots-btrfs 在 set -e 下 grep cryptdevice;
 # 非 LUKS 安装开启 GRUB_BTRFS_ENABLE_CRYPTODISK 会让 grub-mkconfig 直接失败。
-# 构建期先拒绝这种组合, 避免把必坏镜像发出去。
-grub_defaults="${profile_copy}/airootfs/etc/default/grub"
-grub_btrfs_config="${profile_copy}/airootfs/etc/default/grub-btrfs/config"
-if [[ -f "$grub_btrfs_config" ]] &&
-   grep -Eq '^GRUB_BTRFS_ENABLE_CRYPTODISK="?true"?$' "$grub_btrfs_config"; then
-  if [[ ! -f "$grub_defaults" ]] || ! grep -Fq 'cryptdevice=' "$grub_defaults"; then
-    printf '错误: GRUB_BTRFS_ENABLE_CRYPTODISK=true 但 /etc/default/grub 没有 cryptdevice= (非 LUKS 安装)\n' >&2
-    exit 1
-  fi
+# 安装期由 linxiraboot 写目标配置, 构建期检查它仍固定为 false, 避免把必坏
+# 镜像发出去 (接 LUKS 快照时连同 cryptdevice= 一起改, 并更新本门禁)。
+grub_module="${profile_copy}/airootfs/usr/lib/calamares/modules/linxiraboot/main.py"
+if ! grep -Fq "GRUB_BTRFS_ENABLE_CRYPTODISK\", '\"false\"'" "$grub_module"; then
+  printf '错误: linxiraboot 未将 GRUB_BTRFS_ENABLE_CRYPTODISK 固定为 false\n' >&2
+  exit 1
 fi
 
 # 发布证据依赖(2026-10-24): 生成器与镜像版本写入 profile, 由 customize_airootfs.sh 调用
