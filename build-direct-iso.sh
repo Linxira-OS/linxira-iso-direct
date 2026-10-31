@@ -519,6 +519,15 @@ if grep -q '@LINXIRA_LOCAL_REPO@' "${profile_copy}/pacman.conf"; then
   exit 1
 fi
 
+# 2026-11-01: geo.mirror.pkgbuild.com 在下载大包时 SSL/连接超时, 构建不是卡编译,
+# 而是卡在 pacman 下载。把构建用 pacman.conf 的 mirrorlist 换成可直连的静态镜像,
+# 依次尝试阿里云/中科大/清华; 不再依赖宿主 /etc/pacman.d/mirrorlist。
+sed -i 's|^Include = /etc/pacman.d/mirrorlist$|Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch\nServer = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch\nServer = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch|' "${profile_copy}/pacman.conf"
+if grep -q '^Include = /etc/pacman.d/mirrorlist$' "${profile_copy}/pacman.conf"; then
+  printf 'Could not replace the build mirrorlist.\n' >&2
+  exit 1
+fi
+
 target_manifest="${profile_copy}/target-packages.x86_64"
 minimal_manifest="${profile_copy}/target-packages-minimal.x86_64"
 candidate_manifest="${profile_copy}/offline-candidate-packages.x86_64"
@@ -587,7 +596,7 @@ printf '1\n1\n1\n' | unshare --map-auto --map-root-user pacman --disable-sandbox
   --dbpath "$pacman_db" \
   --cachedir "$package_cache" \
   --logfile /dev/null \
-  --sync --refresh --downloadonly --noconfirm --needed --disable-download-timeout \
+  --sync --refresh --downloadonly --noconfirm --needed \
   "${target_packages[@]}"
 
 # B7: 只把 pacman 解析出的目标闭包拷入离线仓库, 避免把 cache 里历史版本或
