@@ -68,7 +68,7 @@ class BootMenuTests(unittest.TestCase):
     def test_grub_settings_pin_mainline_top_level(self):
         settings = dict(linxiraboot.GRUB_SETTINGS)
         self.assertEqual(settings["GRUB_TOP_LEVEL"], '"/boot/vmlinuz-linux"')
-        self.assertEqual(settings["GRUB_DEFAULT"], "saved")
+        self.assertEqual(settings["GRUB_DEFAULT"], "0")
         self.assertEqual(settings["GRUB_SAVEDEFAULT"], "true")
         self.assertEqual(settings["GRUB_TIMEOUT"], "2")
         self.assertEqual(settings["GRUB_DISABLE_SUBMENU"], "true")

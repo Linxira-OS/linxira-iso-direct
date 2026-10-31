@@ -97,7 +97,11 @@ class FirmwareInteractionTests(unittest.TestCase):
             PROFILE_ROOT / "airootfs/etc/calamares/settings.conf"
         ).read_text(encoding="utf-8")
         self.assertIn("- shellprocess@linxira-grub-env", settings)
-        self.assertLess(settings.index("- bootloader"), settings.index("- shellprocess@linxira-grub-env"))
+        cleanup = settings.index("- shellprocess@linxira-grub-env")
+        self.assertLess(settings.index("- bootloader"), cleanup)
+        # linxira-timeshift runs grub-mkconfig; grub-editenv - list recreates
+        # the btrfs env, so cleanup must come after it.
+        self.assertLess(settings.index("- shellprocess@linxira-timeshift"), cleanup)
         script = (
             PROFILE_ROOT / "airootfs/usr/share/linxira/grub/linxira-grub-env.sh"
         )

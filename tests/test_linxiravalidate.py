@@ -527,6 +527,38 @@ class GrubEnvValidationTests(unittest.TestCase):
             self.assertTrue(any("ESP" in item for item in failures))
             self.assertTrue(any("/boot/grub/grubenv" in item for item in failures))
 
+    def test_final_cleanup_removes_btrfs_env_after_grub_mkconfig(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=0123-4567 /boot/efi vfat umask=0077 0 2\n",
+                encoding="utf-8",
+            )
+            esp_env = root / "boot/efi/EFI/linxira/grubenv"
+            esp_env.parent.mkdir(parents=True)
+            esp_env.write_text("saved_entry=0\n", encoding="utf-8")
+            legacy = root / "boot/grub/grubenv"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text("", encoding="utf-8")
+            self.assertTrue(linxiravalidate._remove_btrfs_grubenv(root))
+            self.assertFalse(legacy.exists())
+            self.assertEqual(linxiravalidate._grub_env_failures(root), [])
+
+    def test_final_cleanup_does_not_touch_bios_block(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "etc").mkdir()
+            (root / "etc/fstab").write_text(
+                "UUID=root-uuid / btrfs rw,subvol=@ 0 0\n",
+                encoding="utf-8",
+            )
+            legacy = root / "boot/grub/grubenv"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text("saved_entry=0\n", encoding="utf-8")
+            self.assertFalse(linxiravalidate._remove_btrfs_grubenv(root))
+            self.assertTrue(legacy.exists())
+
     def test_bios_install_without_esp_is_not_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -25,15 +25,16 @@ ESP_ENV_RELATIVE = Path("EFI/linxira/grubenv")
 # 2026-09-20 修复: GRUB_DEFAULT=0 的"第一项"由 grub 10_linux 字符串排序决定,
 # "linux-lts" 会被误排到 "linux" 之前 —— 默认启动落进 LTS。GRUB_TOP_LEVEL
 # 显式钉死主线内核为顶层默认项, LTS 仅作平铺菜单中的回退项。
-# 2026-10-31 重构: GRUB_DEFAULT=saved, saved_entry 由 GRUB 菜单选择更新;
+# 2026-10-31 重构: GRUB_DEFAULT=0, saved_entry 由 GRUB 菜单选择更新;
 # UEFI 安装把 grubenv 放到 ESP, 不再在 btrfs /boot 上创建会被 GRUB 判定为
 # sparse 的 inline 文件。BIOS 安装才回退到 /boot/grub/grubenv。
 GRUB_SETTINGS = [
-    # 记住上次启动项: Windows 重启回 Windows, Linux 重启回 Linux/LTS。
-    # 初次安装由 _prepare_grub_env 写入 saved_entry=0(主线内核); 之后 GRUB
-    # 在用户选择条目时更新。Windows 自定义条目也必须调用 savedefault,
-    # 否则从 Windows 重启会回到 Linux。
-    ("GRUB_DEFAULT", "saved"),
+    # GRUB_DEFAULT 必须是 0, 不能是 saved: grub-mkconfig 遇到 saved 会执行
+    # grub-editenv - list, 而 grub-editenv 会在文件不存在时自动创建一个空的
+    # btrfs /boot/grub/grubenv, 首启又报 sparse file not allowed。
+    # 真正的"上次选择"由 02_linxira-env 从 ESP 读取 saved_entry 后覆盖 default;
+    # GRUB_SAVEDEFAULT=true 仍会让 10_linux/Windows 条目写 savedefault 到 ESP。
+    ("GRUB_DEFAULT", "0"),
     ("GRUB_SAVEDEFAULT", "true"),
     ("GRUB_TOP_LEVEL", '"/boot/vmlinuz-linux"'),
     # 菜单只停留 2 秒; 不操作时按 saved_entry 启动, 操作时可用方向键选择。

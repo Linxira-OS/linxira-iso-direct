@@ -293,8 +293,43 @@ def _require_paths(root, paths, failures):
             failures.append("empty initramfs: " + path)
 
 
+def _esp_mountpoint(root_path):
+    """Return the ESP mountpoint from the target fstab, if there is one."""
+    fstab = root_path / "etc/fstab"
+    if not fstab.is_file():
+        return None
+    for line in fstab.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if len(fields) >= 3 and fields[0] and not fields[0].startswith("#"):
+            if fields[1] in ("/boot/efi", "/efi"):
+                return fields[1]
+    return None
+
+
+def _remove_btrfs_grubenv(root):
+    """Delete the btrfs env block after the last grub-mkconfig run.
+
+    grub-mkconfig calls grub-editenv - list, and grub-editenv creates an empty
+    1024-byte grubenv when the file does not exist.  Removing the btrfs file
+    before linxira-timeshift therefore is not enough; this final pass runs in
+    linxiravalidate after every generated grub.cfg.
+    """
+    root_path = Path(root)
+    esp_mountpoint = _esp_mountpoint(root_path)
+    if esp_mountpoint is None:
+        return False
+    esp_env = root_path / esp_mountpoint.lstrip("/") / "EFI/linxira/grubenv"
+    if not esp_env.is_file():
+        return False
+    legacy = root_path / "boot/grub/grubenv"
+    if not legacy.exists():
+        return False
+    legacy.unlink()
+    return True
+
+
 def _grub_env_failures(root):
-    """Reject the two GRUB boot regressions at install time.
+    """Reject the btrfs grubenv boot regression at install time.
 
     UEFI installs must use the ESP grubenv; a leftover btrfs
     /boot/grub/grubenv is exactly what produces "sparse file not allowed".
@@ -304,16 +339,7 @@ def _grub_env_failures(root):
     marker = root_path / "etc/linxira/bootloader"
     if marker.is_file() and marker.read_text(encoding="utf-8").strip() != "grub":
         return []
-    fstab = root_path / "etc/fstab"
-    if not fstab.is_file():
-        return []
-    esp_mountpoint = None
-    for line in fstab.read_text(encoding="utf-8").splitlines():
-        fields = line.split()
-        if len(fields) >= 3 and fields[0] and not fields[0].startswith("#"):
-            if fields[1] in ("/boot/efi", "/efi"):
-                esp_mountpoint = fields[1]
-                break
+    esp_mountpoint = _esp_mountpoint(root_path)
     if esp_mountpoint is None:
         return []
 
@@ -479,6 +505,10 @@ def run():
     # 引导程序按用户选择校验(grub/systemd-boot/refind), 不再硬编码 grub
     bootloader = libcalamares.globalstorage.value("packagechooser_bootloader") or "grub"
     bootloader_package = BOOTLOADER_PACKAGES.get(bootloader)
+    try:
+        _remove_btrfs_grubenv(root)
+    except OSError as error:
+        failures.append("could not remove btrfs GRUB env: " + str(error))
     # 2026-09-21: 「服务器 · 纯 Arch 最小安装」走独立轻量校验清单
     if _minimal_baseline_selected(root):
         return _validate_minimal_system(root, bootloader, bootloader_package)
