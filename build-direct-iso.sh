@@ -522,7 +522,7 @@ fi
 # 2026-11-01: geo.mirror.pkgbuild.com 在下载大包时 SSL/连接超时, 构建不是卡编译,
 # 而是卡在 pacman 下载。把构建用 pacman.conf 的 mirrorlist 换成可直连的静态镜像,
 # 依次尝试阿里云/中科大/清华; 不再依赖宿主 /etc/pacman.d/mirrorlist。
-sed -i 's|^Include = /etc/pacman.d/mirrorlist$|Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch\nServer = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch\nServer = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch|' "${profile_copy}/pacman.conf"
+sed -i 's|^Include = /etc/pacman.d/mirrorlist$|Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch|' "${profile_copy}/pacman.conf"
 if grep -q '^Include = /etc/pacman.d/mirrorlist$' "${profile_copy}/pacman.conf"; then
   printf 'Could not replace the build mirrorlist.\n' >&2
   exit 1
